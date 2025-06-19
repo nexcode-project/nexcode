@@ -2,18 +2,21 @@ import os
 import subprocess
 import click
 from openai import OpenAI
+from .config import config
 
 # --- Configuration ---
-# Check for API Key and initialize the OpenAI client.
-# It's recommended to set the OPENAI_API_KEY environment variable.
-api_key = os.environ.get("OPENAI_API_KEY")
+# Read configuration from config file and environment variables
+api_key = config['api']['key'] or os.environ.get("OPENAI_API_KEY")
+base_url = config['api']['base_url']
+model_name = config['model']['name']
+
 if not api_key:
-    click.echo("Error: The OPENAI_API_KEY environment variable is not set.")
-    click.echo("Please set it to your OpenAI API key.")
+    click.echo("Error: API key is not configured.")
+    click.echo("Please set it in ~/.config/aicommit/config.yaml or as an OPENAI_API_KEY environment variable.")
     exit(1)
 
 try:
-    client = OpenAI(api_key=api_key, base_url="http://10.12.160.15/v1")
+    client = OpenAI(api_key=api_key, base_url=base_url)
 except Exception as e:
     click.echo(f"Error initializing OpenAI client: {e}")
     exit(1)
@@ -36,13 +39,13 @@ def get_ai_solution_for_git_error(command, error_message):
     """
     try:
         response = client.chat.completions.create(
-            model="codedrive-chat",
+            model=model_name,
             messages=[
                 {"role": "system", "content": "You are a Git expert who helps resolve errors."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=512,
-            temperature=0.5,
+            max_tokens=config['model']['max_tokens_solution'],
+            temperature=config['model']['solution_temperature'],
         )
         solution = response.choices[0].message.content.strip()
         return solution
@@ -111,13 +114,13 @@ def generate_commit_message(diff):
     
     try:
         response = client.chat.completions.create(
-            model="codedrive-chat",
+            model=model_name,
             messages=[
                 {"role": "system", "content": "You are an expert at writing git commit messages according to the Conventional Commits specification."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=60,
-            temperature=0.7,
+            max_tokens=config['model']['max_tokens_commit'],
+            temperature=config['model']['commit_temperature'],
         )
         message = response.choices[0].message.content.strip().strip('"`')
         return message
