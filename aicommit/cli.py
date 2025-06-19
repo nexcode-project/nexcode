@@ -178,36 +178,66 @@ def is_tracked(file_path):
                           capture_output=True, text=True)
     return result.returncode == 0
 
+def get_changed_files():
+    """Get all changed files (modified, added, deleted)."""
+    result = subprocess.run(['git', 'status', '--porcelain'], 
+                          capture_output=True, text=True)
+    if result.returncode != 0:
+        return []
+    
+    files = []
+    for line in result.stdout.splitlines():
+        if len(line) > 3:
+            # Extract filename from git status output
+            filename = line[3:].strip()
+            files.append(filename)
+    return files
+
+def should_ignore_file(file_path):
+    """Check if a file should be ignored based on .gitignore rules."""
+    # For tracked files, we need to check manually if they're in .gitignore
+    try:
+        with open('.gitignore', 'r') as f:
+            ignore_patterns = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        
+        import fnmatch
+        for pattern in ignore_patterns:
+            if fnmatch.fnmatch(file_path, pattern) or fnmatch.fnmatch(file_path, f"**/{pattern}"):
+                return True
+        return False
+    except FileNotFoundError:
+        return False
+
 def smart_git_add():
     """Intelligently add files respecting .gitignore even for tracked files."""
-    # First, get all files
-    all_files = get_all_files()
+    changed_files = get_changed_files()
     
-    # Handle tracked files that should be ignored
-    for file_path in all_files:
-        if is_tracked(file_path) and is_ignored(file_path):
-            try:
-                # Remove the file from version control but keep it in the working directory
-                subprocess.run(['git', 'rm', '--cached', file_path], check=True)
-                click.echo(f"Removed {file_path} from version control (now ignored)")
-            except subprocess.CalledProcessError:
-                click.echo(f"Warning: Failed to remove {file_path} from version control")
+    if not changed_files:
+        return True
     
-    # Now get the updated list of files (after removing ignored ones from version control)
-    all_files = get_all_files()
+    files_to_add = []
+    ignored_files = []
     
-    # Filter out ignored files
-    files_to_add = [f for f in all_files if not is_ignored(f)]
+    for file_path in changed_files:
+        if should_ignore_file(file_path):
+            ignored_files.append(file_path)
+        else:
+            files_to_add.append(file_path)
+    
+    if ignored_files:
+        click.echo(f"Ignoring files: {', '.join(ignored_files)}")
     
     if not files_to_add:
         return True  # No files to add
         
     # Add only non-ignored files
     try:
+        subprocess.run(['git', 'add'] + files_to_add, check=True)
         if files_to_add:
-            subprocess.run(['git', 'add', '--'] + files_to_add, check=True)
+            click.echo(f"Added files: {', '.join(files_to_add)}")
         return True
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as e:
+        click.echo(f"Error adding files: {e}")
         return False
 
 @cli.command()
