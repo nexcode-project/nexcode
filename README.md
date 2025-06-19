@@ -77,6 +77,59 @@ aicommit push --branch "feat/new-feature"
 | `aicommit push` | | 自动暂存所有变更，提交并推送到当前分支。 |
 | | `--branch <branch_name>` | 创建一个新分支，然后暂存、提交并推送到新分支。 |
 
+## 🚀 高价值功能建议
+
+### 1. **配置管理命令** (推荐优先级：⭐⭐⭐⭐⭐)
+```bash
+aicommit config --list                    # 查看当前配置
+aicommit config --set model.name gpt-4    # 修改配置
+aicommit config --reset                   # 重置为默认配置
+```
+
+### 2. **提交历史分析** (推荐优先级：⭐⭐⭐⭐)
+```bash
+aicommit analyze                          # 分析最近的提交质量
+aicommit suggest-improvements             # AI 建议如何改进提交习惯
+```
+
+### 3. **干运行模式** (推荐优先级：⭐⭐⭐⭐⭐)
+```bash
+aicommit push --dry-run                   # 预览将要进行的操作，不实际执行
+aicommit commit --preview                 # 只生成提交信息，不提交
+```
+
+### 4. **多种提交信息风格** (推荐优先级：⭐⭐⭐)
+```bash
+aicommit commit --style conventional      # 默认的 conventional commits
+aicommit commit --style semantic          # 语义化提交
+aicommit commit --style simple            # 简洁风格
+```
+
+### 5. **交互式文件选择** (推荐优先级：⭐⭐⭐⭐)
+```bash
+aicommit commit --interactive             # 交互式选择要提交的文件
+```
+
+## 🛠️ 实用性功能
+
+### 6. **版本信息和自更新**
+```bash
+aicommit --version                        # 显示版本信息
+aicommit update                           # 检查并自更新
+```
+
+### 7. **模板和预设**
+```bash
+aicommit template --save "my-template"    # 保存当前配置为模板
+aicommit template --use "my-template"     # 使用指定模板
+```
+
+### 8. **统计和报告**
+```bash
+aicommit stats                            # 显示使用统计
+aicommit report --last-week               # 生成上周的提交报告
+```
+
 ## ❓ 常见问题
 
 - **AI 模型使用的是哪个？**  
