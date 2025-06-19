@@ -172,9 +172,28 @@ def is_ignored(file_path):
                           capture_output=True, text=True)
     return result.returncode == 0
 
+def is_tracked(file_path):
+    """Check if a file is tracked by git."""
+    result = subprocess.run(['git', 'ls-files', '--error-unmatch', file_path],
+                          capture_output=True, text=True)
+    return result.returncode == 0
+
 def smart_git_add():
     """Intelligently add files respecting .gitignore even for tracked files."""
     # First, get all files
+    all_files = get_all_files()
+    
+    # Handle tracked files that should be ignored
+    for file_path in all_files:
+        if is_tracked(file_path) and is_ignored(file_path):
+            try:
+                # Remove the file from version control but keep it in the working directory
+                subprocess.run(['git', 'rm', '--cached', file_path], check=True)
+                click.echo(f"Removed {file_path} from version control (now ignored)")
+            except subprocess.CalledProcessError:
+                click.echo(f"Warning: Failed to remove {file_path} from version control")
+    
+    # Now get the updated list of files (after removing ignored ones from version control)
     all_files = get_all_files()
     
     # Filter out ignored files
