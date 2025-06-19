@@ -3,8 +3,8 @@
 api:
   # Your OpenAI API key.
   # If left blank, the tool will try to use the OPENAI_API_KEY environment variable.
-  key: 
-  base_url: 
+  key: c1d6780e98864594bda92e698f6f9f0c
+  base_url: http://10.12.160.15/v1
 model:
   # The model to use for generating text.
   name: codedrive-chat
