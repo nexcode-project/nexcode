@@ -158,6 +158,39 @@ def commit():
     else:
         click.echo("✗ Failed to generate commit message. Aborting.")
 
+def get_all_files():
+    """Get all files in the repository, including untracked ones."""
+    result = subprocess.run(['git', 'ls-files', '--others', '--exclude-standard', '--cached'],
+                          capture_output=True, text=True)
+    if result.returncode == 0:
+        return result.stdout.splitlines()
+    return []
+
+def is_ignored(file_path):
+    """Check if a file is ignored by .gitignore rules."""
+    result = subprocess.run(['git', 'check-ignore', file_path],
+                          capture_output=True, text=True)
+    return result.returncode == 0
+
+def smart_git_add():
+    """Intelligently add files respecting .gitignore even for tracked files."""
+    # First, get all files
+    all_files = get_all_files()
+    
+    # Filter out ignored files
+    files_to_add = [f for f in all_files if not is_ignored(f)]
+    
+    if not files_to_add:
+        return True  # No files to add
+        
+    # Add only non-ignored files
+    try:
+        if files_to_add:
+            subprocess.run(['git', 'add', '--'] + files_to_add, check=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
 @cli.command()
 @click.option('--branch', 'new_branch', default=None, help='Create a new branch and push to it.')
 def push(new_branch):
@@ -171,7 +204,8 @@ def push(new_branch):
 
     # 2. Add all changes
     click.echo("› Staging all changes...")
-    if not run_git_command(['git', 'add', '--no-ignore-removal', '.']):
+    if not smart_git_add():
+        click.echo("Error: Failed to stage changes.")
         return
     
     # Check if there are any changes to commit after adding
