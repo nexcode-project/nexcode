@@ -171,7 +171,7 @@ def push(new_branch):
 
     # 2. Add all changes
     click.echo("› Staging all changes...")
-    if not run_git_command(['git', 'add', '.']):
+    if not run_git_command(['git', 'add', '--no-ignore-removal', '.']):
         return
     
     # Check if there are any changes to commit after adding
