@@ -105,6 +105,10 @@ def generate_commit_message(diff):
     The message should strictly follow the Conventional Commits specification.
     It should start with a type like 'feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore', followed by a short description in lower case.
     Example: fix: correct minor typos in documentation
+    The message should be concise and descriptive, and should not be too long.
+    The message only contains the commit message, no other text.
+    The message should be in English.
+    The message should be only one line.
 
     Git Diff:
     ---
@@ -123,6 +127,9 @@ def generate_commit_message(diff):
             temperature=config['model']['commit_temperature'],
         )
         message = response.choices[0].message.content.strip().strip('"`')
+        # Check if message follows conventional commit format
+        if not any(message.startswith(prefix + ":") for prefix in ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore']):
+            message = "feat: " + message
         return message
     except Exception as e:
         click.echo(f"Error generating commit message from OpenAI: {e}")
