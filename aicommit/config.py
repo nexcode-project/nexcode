@@ -24,6 +24,10 @@ DEFAULT_CONFIG = {
         "solution_temperature": 0.5,
         "max_tokens_commit": 60,
         "max_tokens_solution": 512
+    },
+    "commit": {
+        # Default commit message style: conventional, semantic, simple, emoji
+        "style": "conventional"
     }
 }
 

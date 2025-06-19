@@ -104,21 +104,11 @@ def get_git_diff(staged=True, added_only=False):
     return result.stdout if result else None
 
 # --- AI Helper Function ---
-def generate_commit_message(diff):
-    """Generates a commit message using the OpenAI API."""
-    if not diff or not diff.strip():
-        return "feat: Initial commit or no changes detected"
-
-    client = get_openai_client()
-    if not client:
-        return None
+def get_commit_style_prompt(style, diff):
+    """Generate style-specific prompts for commit messages."""
     
-    model_name = app_config['model']['name']
-    prompt = f"""
-    Based on the following git diff, please generate a concise and descriptive commit message.
-    The message should strictly follow the Conventional Commits specification.
-    It should start with a type like 'feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore', followed by a short description in lower case.
-    Example: fix: correct minor typos in documentation
+    common_instructions = f"""
+    Based on the following git diff, please generate a commit message.
     The message should be concise and descriptive, and should not be too long.
     The message only contains the commit message, no other text.
     The message should be in English.
@@ -130,20 +120,102 @@ def generate_commit_message(diff):
     ---
     """
     
+    if style == "conventional":
+        return f"""
+        {common_instructions}
+        
+        Use the Conventional Commits specification.
+        Start with a type like 'feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore', followed by a short description in lower case.
+        Examples:
+        - feat: add user authentication
+        - fix: resolve database connection issue
+        - docs: update installation guide
+        """
+    
+    elif style == "semantic":
+        return f"""
+        {common_instructions}
+        
+        Use semantic commit format with clear action words.
+        Start with an action verb in present tense, followed by what was changed.
+        Examples:
+        - Add user authentication system
+        - Fix database connection timeout
+        - Update documentation for API endpoints
+        - Remove deprecated utility functions
+        """
+    
+    elif style == "simple":
+        return f"""
+        {common_instructions}
+        
+        Use a simple, direct description of what was changed.
+        Be clear and concise without formal prefixes.
+        Examples:
+        - User authentication added
+        - Fixed login bug
+        - Updated README
+        - Code cleanup
+        """
+    
+    elif style == "emoji":
+        return f"""
+        {common_instructions}
+        
+        Use emoji-prefixed commit messages following gitmoji convention.
+        Start with an appropriate emoji, then a clear description.
+        Examples:
+        - ✨ Add user authentication
+        - 🐛 Fix database connection issue
+        - 📝 Update documentation
+        - ♻️ Refactor user service
+        - 🎨 Improve code structure
+        - 🚀 Deploy new features
+        - 🔧 Update configuration
+        """
+    
+    else:
+        # Default to conventional if unknown style
+        return get_commit_style_prompt("conventional", diff)
+
+def generate_commit_message(diff, style=None):
+    """Generates a commit message using the OpenAI API with specified style."""
+    if not diff or not diff.strip():
+        return "feat: Initial commit or no changes detected"
+
+    client = get_openai_client()
+    if not client:
+        return None
+    
+    # Use provided style or fall back to config default
+    if style is None:
+        style = app_config.get('commit', {}).get('style', 'conventional')
+    
+    model_name = app_config['model']['name']
+    prompt = get_commit_style_prompt(style, diff)
+    
     try:
         response = client.chat.completions.create(
             model=model_name,
             messages=[
-                {"role": "system", "content": "You are an expert at writing git commit messages according to the Conventional Commits specification."},
+                {"role": "system", "content": f"You are an expert at writing git commit messages in the {style} style."},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=app_config['model']['max_tokens_commit'],
             temperature=app_config['model']['commit_temperature'],
         )
         message = response.choices[0].message.content.strip().strip('"`')
-        # Check if message follows conventional commit format
-        if not any(message.startswith(prefix + ":") for prefix in ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore']):
-            message = "feat: " + message
+        
+        # Style-specific post-processing
+        if style == "conventional":
+            # Ensure conventional commit format
+            conventional_prefixes = ['feat', 'fix', 'docs', 'style', 'refactor', 'test', 'chore', 'build', 'ci', 'perf']
+            if not any(message.startswith(prefix + ":") for prefix in conventional_prefixes):
+                message = "feat: " + message
+        elif style == "semantic":
+            # Ensure it starts with a verb
+            message = message[0].upper() + message[1:] if message else message
+        
         return message
     except Exception as e:
         click.echo(f"Error generating commit message from OpenAI: {e}")
@@ -245,7 +317,9 @@ def cli():
 @cli.command()
 @click.option('--dry-run', is_flag=True, help='Preview the commit message without actually committing.')
 @click.option('--preview', is_flag=True, help='Only generate and show the commit message.')
-def commit(dry_run, preview):
+@click.option('--style', type=click.Choice(['conventional', 'semantic', 'simple', 'emoji']), 
+              help='Commit message style (overrides config default).')
+def commit(dry_run, preview, style):
     """Generates a commit message for staged changes and commits them."""
     click.echo("› Checking for staged changes...")
     diff = get_git_diff(staged=True)
@@ -254,8 +328,11 @@ def commit(dry_run, preview):
         click.echo("No staged changes found. Use 'git add <files>' to stage your changes first.")
         return
 
-    click.echo("› Generating commit message with AI...")
-    commit_message = generate_commit_message(diff)
+    # Show which style is being used
+    used_style = style or app_config.get('commit', {}).get('style', 'conventional')
+    click.echo(f"› Generating commit message with AI ({used_style} style)...")
+    
+    commit_message = generate_commit_message(diff, style)
 
     if commit_message:
         click.echo(f"✓ Generated commit message:\n  {commit_message}")
@@ -277,7 +354,9 @@ def commit(dry_run, preview):
 @cli.command()
 @click.option('--branch', 'new_branch', default=None, help='Create a new branch and push to it.')
 @click.option('--dry-run', is_flag=True, help='Preview all operations without actually executing them.')
-def push(new_branch, dry_run):
+@click.option('--style', type=click.Choice(['conventional', 'semantic', 'simple', 'emoji']), 
+              help='Commit message style (overrides config default).')
+def push(new_branch, dry_run, style):
     """Adds all changes, commits, and pushes to the remote repository."""
     
     if dry_run:
@@ -307,11 +386,20 @@ def push(new_branch, dry_run):
         diff = "simulated diff for dry run"
         
     # 3. Generate commit message
-    click.echo("› Generating commit message with AI...")
+    used_style = style or app_config.get('commit', {}).get('style', 'conventional')
+    click.echo(f"› Generating commit message with AI ({used_style} style)...")
+    
     if not dry_run:
-        commit_message = generate_commit_message(diff)
+        commit_message = generate_commit_message(diff, style)
     else:
-        commit_message = "[DRY RUN] feat: example commit message"
+        # Generate example message based on style for dry run
+        style_examples = {
+            'conventional': "[DRY RUN] feat: example conventional commit",
+            'semantic': "[DRY RUN] Add example feature implementation",
+            'simple': "[DRY RUN] Example feature added",
+            'emoji': "[DRY RUN] ✨ Add example feature"
+        }
+        commit_message = style_examples.get(used_style, "[DRY RUN] feat: example commit message")
 
     if not commit_message:
         click.echo("✗ Failed to generate commit message. Aborting push.")
