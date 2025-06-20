@@ -63,7 +63,7 @@ def load_config():
 
 def save_config(config_dict):
     """Save configuration dictionary to the config file."""
-    config_path = get_config_path()
+    config_path = CONFIG_FILE
     
     # Create directory if it doesn't exist
     config_path.parent.mkdir(parents=True, exist_ok=True)
