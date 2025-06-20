@@ -1,2 +1,0 @@
-[console_scripts]
-nexcode = nexcode.cli:cli
