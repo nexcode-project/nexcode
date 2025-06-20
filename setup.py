@@ -1,17 +1,18 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='ai-commits',
+    name='nexcode',
     version='0.1.0',
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
         'click',
         'openai',
+        'pyyaml',
     ],
     entry_points={
         'console_scripts': [
-            'aicommit = aicommit.cli:cli',
+            'nexcode = nexcode.cli:cli',
         ],
     },
     author='Your Name',
@@ -19,7 +20,7 @@ setup(
     description='A CLI tool to generate git commits using AI',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/YOUR_USERNAME/ai-commits',
+    url='https://github.com/YOUR_USERNAME/nexcode',
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',

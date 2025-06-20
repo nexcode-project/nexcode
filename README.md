@@ -1,4 +1,4 @@
-# ai-commits
+# nexcode
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/python-370/)
 
@@ -15,8 +15,8 @@
 
 1.  **克隆仓库**
     ```bash
-    git clone https://github.com/YOUR_USERNAME/ai-commits.git
-    cd ai-commits
+    git clone https://github.com/YOUR_USERNAME/nexcode.git
+    cd nexcode
     ```
     > 请将 `YOUR_USERNAME` 替换为实际的 GitHub 用户名。
 
@@ -26,14 +26,14 @@
     ```
 
 3.  **安装命令行工具**
-    为了在任何路径下都能使用 `aicommit` 命令，请执行：
+    为了在任何路径下都能使用 `nexcode` 命令，请执行：
     ```bash
     pip install .
     ```
 
 ## ⚙️ 配置
 
-在使用前，你需要配置你的 AI 服务凭证。`ai-commits` 通过环境变量读取 OpenAI API Key。
+在使用前，你需要配置你的 AI 服务凭证。`nexcode` 通过环境变量读取 OpenAI API Key。
 
 ```bash
 export OPENAI_API_KEY='sk-xxxxxxxxxxxxxxxxxxxxxxxx'
@@ -47,7 +47,7 @@ export OPENAI_API_KEY='sk-xxxxxxxxxxxxxxxxxxxxxxxx'
 当你已经使用 `git add` 将文件暂存后，可以运行以下命令：
 
 ```bash
-aicommit commit
+nexcode commit
 ```
 此命令会自动分析暂存区的内容，生成提交信息并执行 `git commit`。
 
@@ -56,7 +56,7 @@ aicommit commit
 如果你想让工具自动暂存所有变更、生成提交信息并推送到远程仓库，可以使用：
 
 ```bash
-aicommit push
+nexcode push
 ```
 该命令会依次执行 `git add .`、`git commit -m "..."` 和 `git push`。
 
@@ -65,7 +65,7 @@ aicommit push
 当需要在一个新分支上进行开发时，可以使用 `--branch` 选项：
 
 ```bash
-aicommit push --branch "feat/new-feature"
+nexcode push --branch "feat/new-feature"
 ```
 工具会自动创建名为 `feat/new-feature` 的新分支，然后执行 add、commit 和 push 操作，并将本地新分支推送到远程。
 
@@ -73,61 +73,61 @@ aicommit push --branch "feat/new-feature"
 
 | 命令 | 选项 | 说明 |
 |---|---|---|
-| `aicommit commit` | | 分析已暂存的变更，生成提交信息并提交。 |
-| `aicommit push` | | 自动暂存所有变更，提交并推送到当前分支。 |
+| `nexcode commit` | | 分析已暂存的变更，生成提交信息并提交。 |
+| `nexcode push` | | 自动暂存所有变更，提交并推送到当前分支。 |
 | | `--branch <branch_name>` | 创建一个新分支，然后暂存、提交并推送到新分支。 |
 
 ## 🚀 高价值功能建议
 
 ### 1. **配置管理命令** (推荐优先级：⭐⭐⭐⭐⭐)
 ```bash
-aicommit config --list                    # 查看当前配置
-aicommit config --set model.name gpt-4    # 修改配置
-aicommit config --reset                   # 重置为默认配置
+nexcode config --list                    # 查看当前配置
+nexcode config --set model.name gpt-4    # 修改配置
+nexcode config --reset                   # 重置为默认配置
 ```
 
 ### 2. **提交历史分析** (推荐优先级：⭐⭐⭐⭐)
 ```bash
-aicommit analyze                          # 分析最近的提交质量
-aicommit suggest-improvements             # AI 建议如何改进提交习惯
+nexcode analyze                          # 分析最近的提交质量
+nexcode suggest-improvements             # AI 建议如何改进提交习惯
 ```
 
 ### 3. **干运行模式** (推荐优先级：⭐⭐⭐⭐⭐)
 ```bash
-aicommit push --dry-run                   # 预览将要进行的操作，不实际执行
-aicommit commit --preview                 # 只生成提交信息，不提交
+nexcode push --dry-run                   # 预览将要进行的操作，不实际执行
+nexcode commit --preview                 # 只生成提交信息，不提交
 ```
 
 ### 4. **多种提交信息风格** (推荐优先级：⭐⭐⭐)
 ```bash
-aicommit commit --style conventional      # 默认的 conventional commits
-aicommit commit --style semantic          # 语义化提交
-aicommit commit --style simple            # 简洁风格
+nexcode commit --style conventional      # 默认的 conventional commits
+nexcode commit --style semantic          # 语义化提交
+nexcode commit --style simple            # 简洁风格
 ```
 
 ### 5. **交互式文件选择** (推荐优先级：⭐⭐⭐⭐)
 ```bash
-aicommit commit --interactive             # 交互式选择要提交的文件
+nexcode commit --interactive             # 交互式选择要提交的文件
 ```
 
 ## 🛠️ 实用性功能
 
 ### 6. **版本信息和自更新**
 ```bash
-aicommit --version                        # 显示版本信息
-aicommit update                           # 检查并自更新
+nexcode --version                        # 显示版本信息
+nexcode update                           # 检查并自更新
 ```
 
 ### 7. **模板和预设**
 ```bash
-aicommit template --save "my-template"    # 保存当前配置为模板
-aicommit template --use "my-template"     # 使用指定模板
+nexcode template --save "my-template"    # 保存当前配置为模板
+nexcode template --use "my-template"     # 使用指定模板
 ```
 
 ### 8. **统计和报告**
 ```bash
-aicommit stats                            # 显示使用统计
-aicommit report --last-week               # 生成上周的提交报告
+nexcode stats                            # 显示使用统计
+nexcode report --last-week               # 生成上周的提交报告
 ```
 
 ## ❓ 常见问题

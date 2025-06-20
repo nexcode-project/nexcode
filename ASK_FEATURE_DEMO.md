@@ -8,22 +8,22 @@ AI Commits 新增了 `ask` 功能，让你可以随时向 AI 助手询问关于 
 
 ```bash
 # 询问具体问题
-aicommit ask --question "如何撤销最后一次提交？"
-aicommit ask -q "什么是 conventional commits？"
+nexcode ask --question "如何撤销最后一次提交？"
+nexcode ask -q "什么是 conventional commits？"
 
 # 询问最佳实践
-aicommit ask -q "如何写好的提交消息？"
+nexcode ask -q "如何写好的提交消息？"
 
 # 询问 Git 工作流
-aicommit ask -q "什么是 Git Flow 工作流程？"
+nexcode ask -q "什么是 Git Flow 工作流程？"
 ```
 
 ### 2. 交互式问答模式
 
 ```bash
 # 启动交互式会话
-aicommit ask --interactive
-aicommit ask -i
+nexcode ask --interactive
+nexcode ask -i
 
 # 然后你可以连续提问，直到输入 'exit' 或按 Ctrl+C 退出
 ```
@@ -79,16 +79,16 @@ aicommit ask -i
 ### 👨‍💻 开发者日常
 ```bash
 # 遇到 Git 问题时快速求助
-aicommit ask -q "我想要回退到上一个版本，但保留工作区的修改"
+nexcode ask -q "我想要回退到上一个版本，但保留工作区的修改"
 
 # 学习新的 Git 功能
-aicommit ask -q "Git worktree 是什么？如何使用？"
+nexcode ask -q "Git worktree 是什么？如何使用？"
 ```
 
 ### 📚 学习和培训
 ```bash
 # 启动交互模式进行系统学习
-aicommit ask -i
+nexcode ask -i
 
 # 然后依次询问：
 # "什么是版本控制？"
@@ -99,16 +99,16 @@ aicommit ask -i
 ### 🔍 问题诊断
 ```bash
 # 遇到错误时寻求解决方案
-aicommit ask -q "fatal: not a git repository 错误如何解决？"
+nexcode ask -q "fatal: not a git repository 错误如何解决？"
 
 # 了解错误原因和预防
-aicommit ask -q "为什么会出现 merge conflict？如何预防？"
+nexcode ask -q "为什么会出现 merge conflict？如何预防？"
 ```
 
 ## 🎉 示例对话
 
 ```
-$ aicommit ask -i
+$ nexcode ask -i
 
 🤖 AI Git Assistant - Interactive Mode
 Ask me anything about Git commits, version control, or development workflows!

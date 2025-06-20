@@ -15,6 +15,8 @@ def run_git_command_with_ai(command, dry_run=False):
 def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs):
     """Implementation of the commit command."""
     click.echo("› Checking for staged changes...")
+    # run git add .
+    run_git_command_with_ai(['git', 'add', '.'])
     diff = get_git_diff(staged=True)
     
     if not diff:

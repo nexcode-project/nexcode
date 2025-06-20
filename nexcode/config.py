@@ -4,7 +4,7 @@ import click
 import os
 
 # Define the path for the configuration file
-CONFIG_DIR = Path.home() / ".config" / "aicommit"
+CONFIG_DIR = Path.home() / ".config" / "nexcode"
 CONFIG_FILE = CONFIG_DIR / "config.yaml"
 
 # Default configuration values

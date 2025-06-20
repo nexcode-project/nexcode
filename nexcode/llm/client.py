@@ -12,7 +12,7 @@ def get_openai_client():
     
     if not api_key:
         click.echo("Error: API key is not configured.")
-        click.echo("Please set it in ~/.config/aicommit/config.yaml or as an OPENAI_API_KEY environment variable.")
+        click.echo("Please set it in ~/.config/nexcode/config.yaml or as an OPENAI_API_KEY environment variable.")
         return None
     
     try:

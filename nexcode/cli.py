@@ -41,7 +41,7 @@ def push(new_branch, dry_run, style, check_bugs, no_check_bugs):
 @click.option('--get', 'get_key', help='Get a configuration value')
 @click.option('--list', 'list_all', is_flag=True, help='List all configuration values')
 def config(set_value, get_key, list_all):
-    """Manage aicommit configuration."""
+    """Manage nexcode configuration."""
     handle_config_command(set_value, get_key, list_all)
 
 

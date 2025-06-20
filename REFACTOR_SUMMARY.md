@@ -1,15 +1,15 @@
 # AI Commits 重构总结
 
 ## 概述
-成功将原本的单个大文件 `aicommit/cli.py` (662行) 重构为多个功能明确的模块，提高了代码的可维护性和模块化程度。
+成功将原本的单个大文件 `nexcode/cli.py` (662行) 重构为多个功能明确的模块，提高了代码的可维护性和模块化程度。
 
 ## 重构后的文件结构
 
-### 1. `aicommit/openai_client.py` (22行)
+### 1. `nexcode/openai_client.py` (22行)
 **功能**: OpenAI 客户端管理
 - `get_openai_client()`: 初始化和配置 OpenAI 客户端
 
-### 2. `aicommit/git_utils.py` (141行)  
+### 2. `nexcode/git_utils.py` (141行)  
 **功能**: Git 操作工具
 - `run_git_command()`: 执行 Git 命令并处理错误
 - `get_git_diff()`: 获取 Git 差异
@@ -20,20 +20,20 @@
 - `should_ignore_file()`: 检查是否应忽略文件
 - `smart_git_add()`: 智能添加文件
 
-### 3. `aicommit/ai_helpers.py` (38行)
+### 3. `nexcode/ai_helpers.py` (38行)
 **功能**: AI 辅助功能
 - `get_ai_solution_for_git_error()`: 为 Git 错误获取 AI 解决方案
 
-### 4. `aicommit/bug_checker.py` (54行)
+### 4. `nexcode/bug_checker.py` (54行)
 **功能**: 代码 Bug 检查
 - `check_code_for_bugs()`: 分析代码变更中的潜在问题
 
-### 5. `aicommit/commit_generator.py` (122行)
+### 5. `nexcode/commit_generator.py` (122行)
 **功能**: 提交消息生成
 - `get_commit_style_prompt()`: 生成不同风格的提示
 - `generate_commit_message()`: 使用 AI 生成提交消息
 
-### 6. `aicommit/cli.py` (318行)
+### 6. `nexcode/cli.py` (318行)
 **功能**: 命令行接口
 - `commit`: 生成并提交变更
 - `push`: 添加、提交并推送变更
