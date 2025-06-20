@@ -1,6 +1,7 @@
 import yaml
 from pathlib import Path
 import click
+import os
 
 # Define the path for the configuration file
 CONFIG_DIR = Path.home() / ".config" / "aicommit"
@@ -27,7 +28,9 @@ DEFAULT_CONFIG = {
     },
     "commit": {
         # Default commit message style: conventional, semantic, simple, emoji
-        "style": "conventional"
+        "style": "conventional",
+        # Whether to run bug analysis by default before committing
+        "check_bugs_by_default": False
     }
 }
 
@@ -58,17 +61,16 @@ def load_config():
             return {}
         return config
 
-def save_config(config_data):
-    """Saves configuration data to the YAML file."""
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+def save_config(config_dict):
+    """Save configuration dictionary to the config file."""
+    config_path = get_config_path()
     
-    header = (
-        "# AI Commits Configuration File\n"
-        "# You can customize your settings here.\n"
-    )
-    with open(CONFIG_FILE, 'w') as configfile:
-        configfile.write(header)
-        yaml.dump(config_data, configfile, default_flow_style=False, sort_keys=False)
+    # Create directory if it doesn't exist
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Save configuration
+    with open(config_path, 'w') as f:
+        yaml.dump(config_dict, f, default_flow_style=False, indent=2)
 
 def get_config_value(key_path):
     """Get a configuration value using dot notation (e.g., 'model.name')."""
