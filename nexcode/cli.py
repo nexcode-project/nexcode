@@ -41,9 +41,10 @@ def push(new_branch, dry_run, style, check_bugs, no_check_bugs):
 @click.option('--get', 'get_key', help='Get a configuration value')
 @click.option('--list', 'list_all', is_flag=True, help='List all configuration values')
 @click.option('--interactive', '-i', is_flag=True, help='Start interactive configuration mode')
-def config(set_value, get_key, list_all, interactive):
+@click.option('--init-local', is_flag=True, help='Initialize local repository configuration')
+def config(set_value, get_key, list_all, interactive, init_local):
     """Manage nexcode configuration. Run without options for interactive mode."""
-    handle_config_command(set_value, get_key, list_all, interactive)
+    handle_config_command(set_value, get_key, list_all, interactive, init_local)
 
 
 @cli.command()

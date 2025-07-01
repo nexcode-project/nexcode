@@ -1,4 +1,5 @@
 import click
+import shlex
 from ..config import config as app_config
 from ..utils.git import get_git_diff, smart_git_add
 from ..llm.services import check_code_for_bugs
@@ -10,6 +11,65 @@ def run_git_command_with_ai(command, dry_run=False):
     """Git command wrapper that includes AI error assistance."""
     from ..utils.git import run_git_command
     return run_git_command(command, dry_run=dry_run, ai_helper_func=get_ai_solution_for_git_error)
+
+
+def get_push_command(target_branch, new_branch=None):
+    """Get the appropriate push command based on local configuration."""
+    # Get local repository configuration
+    local_repo_config = app_config.get('_local_repository', {})
+    
+    if not local_repo_config:
+        # No local config, use default GitHub-style push
+        remote = 'origin'
+        return ['git', 'push', '--set-upstream', remote, target_branch]
+    
+    # Get configuration values
+    remote = local_repo_config.get('remote', 'origin')
+    push_template = local_repo_config.get('push_command', 'git push {remote} {branch}')
+    target_branch_config = local_repo_config.get('target_branch', 'main')
+    repo_type = local_repo_config.get('type', 'github')
+    
+    # Variables for template substitution
+    variables = {
+        'remote': remote,
+        'branch': target_branch,
+        'target_branch': target_branch_config
+    }
+    
+    # Format the push command
+    try:
+        formatted_command = push_template.format(**variables)
+        # Convert to command list
+        command_parts = shlex.split(formatted_command)
+        return command_parts
+    except Exception as e:
+        click.echo(f"Warning: Invalid push command template: {e}")
+        click.echo(f"Falling back to default push command")
+        return ['git', 'push', '--set-upstream', remote, target_branch]
+
+
+def show_push_preview(target_branch, new_branch=None):
+    """Show what push command will be executed."""
+    local_repo_config = app_config.get('_local_repository', {})
+    
+    if local_repo_config:
+        repo_type = local_repo_config.get('type', 'github')
+        push_command = get_push_command(target_branch, new_branch)
+        push_cmd_str = ' '.join(push_command)
+        
+        click.echo(f"📦 仓库类型: {repo_type}")
+        click.echo(f"🚀 推送命令: {push_cmd_str}")
+        
+        # Show explanation for special repository types
+        if repo_type == 'gerrit':
+            click.echo("💡 Gerrit 推送说明: 代码将推送到 refs/for/ 等待代码评审")
+        elif repo_type == 'gitlab':
+            click.echo("💡 GitLab 推送说明: 代码将推送到 GitLab 仓库")
+        elif repo_type == 'gitee':
+            click.echo("💡 Gitee 推送说明: 代码将推送到 Gitee 仓库")
+    else:
+        click.echo("📦 使用默认 GitHub 风格推送")
+        click.echo(f"🚀 推送命令: git push --set-upstream origin {target_branch}")
 
 
 def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
@@ -94,7 +154,7 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
     if not dry_run:
         click.echo("✓ Successfully committed.")
 
-    # 5. Push to remote
+    # 5. Determine target branch
     target_branch = new_branch
     if not target_branch:
         if not dry_run:
@@ -105,12 +165,26 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
         else:
             target_branch = "current-branch"
 
+    # 6. Show push preview and execute push
     click.echo(f"› Pushing to branch '{target_branch}'...")
-    push_command = ['git', 'push', '--set-upstream', 'origin', target_branch]
+    
+    # Show push command preview
+    show_push_preview(target_branch, new_branch)
+    
+    # Get the appropriate push command
+    push_command = get_push_command(target_branch, new_branch)
+    
     if not run_git_command_with_ai(push_command, dry_run):
         return
         
     if not dry_run:
-        click.echo(f"✓ Successfully pushed to 'origin/{target_branch}'.")
+        click.echo(f"✓ Successfully pushed!")
+        
+        # Show additional info for special repository types
+        local_repo_config = app_config.get('_local_repository', {})
+        if local_repo_config.get('type') == 'gerrit':
+            click.echo("💡 代码已推送到 Gerrit，请查看代码评审页面")
+        elif local_repo_config.get('type') == 'gitlab':
+            click.echo("💡 代码已推送到 GitLab")
     else:
         click.secho("\n[DRY RUN COMPLETE] No actual changes were made.", fg="blue", bold=True) 

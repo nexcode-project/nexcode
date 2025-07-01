@@ -100,8 +100,43 @@ def interactive_config():
         click.echo(f"❌ 保存配置时出错: {e}")
 
 
-def handle_config_command(set_value, get_key, list_all, interactive):
+def init_local_config():
+    """初始化本地仓库配置"""
+    click.echo("🏠 初始化本地仓库配置")
+    click.echo("=" * 50)
+    
+    try:
+        config_file, is_new = config_module.init_local_config()
+        
+        if is_new:
+            click.echo("✅ 已创建本地配置文件！")
+            click.echo("✅ 已将 .nexcode/ 添加到 .gitignore")
+        else:
+            click.echo("ℹ️  本地配置文件已存在")
+        
+        click.echo(f"\n📁 配置文件位置: {config_file}")
+        click.echo("\n📝 请编辑配置文件以设置仓库特定的推送行为:")
+        click.echo(f"   {config_file}")
+        
+        click.echo("\n💡 配置示例:")
+        click.echo("   - GitHub 标准推送: git push {remote} {branch}")
+        click.echo("   - Gerrit 代码评审: git push {remote} HEAD:refs/for/{target_branch}")
+        click.echo("   - GitLab MR 创建: git push {remote} {branch} -o merge_request.create")
+        
+        click.echo("\n🧪 配置完成后，使用以下命令测试:")
+        click.echo("   nexcode push --dry-run")
+        
+    except Exception as e:
+        click.echo(f"❌ 初始化本地配置时出错: {e}")
+
+
+def handle_config_command(set_value, get_key, list_all, interactive, init_local):
     """Implementation of the config command."""
+    
+    # 初始化本地配置
+    if init_local:
+        init_local_config()
+        return
     
     # 如果没有提供任何选项，启动交互式配置
     if not any([set_value, get_key, list_all, interactive]):
@@ -166,6 +201,15 @@ def handle_config_command(set_value, get_key, list_all, interactive):
         click.echo("Current configuration:")
         click.echo("-" * 40)
         
+        # Check if we have local config
+        local_config_exists = config_module.get_local_config_file_path().exists()
+        if local_config_exists:
+            click.echo("📝 配置来源: 全局配置 + 本地配置覆盖")
+        else:
+            click.echo("📝 配置来源: 全局配置")
+        
+        click.echo()
+        
         def print_config(config_dict, prefix=""):
             for key, value in config_dict.items():
                 if isinstance(value, dict):
@@ -173,4 +217,18 @@ def handle_config_command(set_value, get_key, list_all, interactive):
                 else:
                     click.echo(f"{prefix}{key} = {value}")
         
-        print_config(app_config) 
+        print_config(app_config)
+        
+        if local_config_exists:
+            click.echo("\n🏠 本地配置文件:")
+            click.echo(f"   {config_module.get_local_config_file_path()}")
+            
+            local_config = config_module.load_local_config()
+            if local_config.get('repository'):
+                repo_config = local_config['repository']
+                click.echo(f"\n📦 本地仓库设置:")
+                click.echo(f"   类型: {repo_config.get('type', 'N/A')}")
+                click.echo(f"   推送命令: {repo_config.get('push_command', 'N/A')}")
+        else:
+            click.echo(f"\n💡 要为此仓库创建本地配置，请运行:")
+            click.echo(f"   nexcode config --init-local") 
