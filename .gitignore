@@ -1,2 +1,4 @@
 */config.yaml
 .venv/
+*.egg-info/
+build/

@@ -40,9 +40,10 @@ def push(new_branch, dry_run, style, check_bugs, no_check_bugs):
 @click.option('--set', 'set_value', help='Set a configuration value (format: key=value, e.g. commit.check_bugs_by_default=true)')
 @click.option('--get', 'get_key', help='Get a configuration value')
 @click.option('--list', 'list_all', is_flag=True, help='List all configuration values')
-def config(set_value, get_key, list_all):
-    """Manage nexcode configuration."""
-    handle_config_command(set_value, get_key, list_all)
+@click.option('--interactive', '-i', is_flag=True, help='Start interactive configuration mode')
+def config(set_value, get_key, list_all, interactive):
+    """Manage nexcode configuration. Run without options for interactive mode."""
+    handle_config_command(set_value, get_key, list_all, interactive)
 
 
 @cli.command()

@@ -3,8 +3,115 @@ from ..config import config as app_config
 from .. import config as config_module
 
 
-def handle_config_command(set_value, get_key, list_all):
+def interactive_config():
+    """启动交互式配置模式"""
+    click.echo("🔧 欢迎使用 Nexcode 交互式配置")
+    click.echo("=" * 50)
+    
+    # 获取当前配置
+    current_config = dict(app_config)
+    
+    # API 配置
+    click.echo("\n📡 API 配置")
+    click.echo("-" * 20)
+    
+    # API Key
+    current_key = current_config.get('api', {}).get('key', '')
+    if current_key:
+        click.echo(f"当前 API Key: {'*' * (len(current_key) - 8)}{current_key[-8:] if len(current_key) > 8 else current_key}")
+    else:
+        click.echo("当前 API Key: 未设置")
+    
+    new_key = click.prompt('请输入 API Key (留空保持不变)', default='', show_default=False)
+    if new_key.strip():
+        if 'api' not in current_config:
+            current_config['api'] = {}
+        current_config['api']['key'] = new_key.strip()
+    
+    # Base URL
+    current_base_url = current_config.get('api', {}).get('base_url', '')
+    new_base_url = click.prompt('请输入 API Base URL', default=current_base_url or 'http://10.12.160.15/v1')
+    if 'api' not in current_config:
+        current_config['api'] = {}
+    current_config['api']['base_url'] = new_base_url
+    
+    # 模型配置
+    click.echo("\n🤖 模型配置")
+    click.echo("-" * 20)
+    
+    current_model = current_config.get('model', {}).get('name', '')
+    new_model = click.prompt('请输入模型名称', default=current_model or 'codedrive-chat')
+    if 'model' not in current_config:
+        current_config['model'] = {}
+    current_config['model']['name'] = new_model
+    
+    # Commit 温度
+    current_commit_temp = current_config.get('model', {}).get('commit_temperature', 0.7)
+    new_commit_temp = click.prompt('提交消息生成温度 (0.0-1.0)', default=current_commit_temp, type=float)
+    current_config['model']['commit_temperature'] = max(0.0, min(1.0, new_commit_temp))
+    
+    # Solution 温度
+    current_solution_temp = current_config.get('model', {}).get('solution_temperature', 0.5)
+    new_solution_temp = click.prompt('解决方案生成温度 (0.0-1.0)', default=current_solution_temp, type=float)
+    current_config['model']['solution_temperature'] = max(0.0, min(1.0, new_solution_temp))
+    
+    # Max tokens
+    current_commit_tokens = current_config.get('model', {}).get('max_tokens_commit', 60)
+    new_commit_tokens = click.prompt('提交消息最大 tokens', default=current_commit_tokens, type=int)
+    current_config['model']['max_tokens_commit'] = max(1, new_commit_tokens)
+    
+    current_solution_tokens = current_config.get('model', {}).get('max_tokens_solution', 512)
+    new_solution_tokens = click.prompt('解决方案最大 tokens', default=current_solution_tokens, type=int)
+    current_config['model']['max_tokens_solution'] = max(1, new_solution_tokens)
+    
+    # Commit 配置
+    click.echo("\n📝 提交配置")
+    click.echo("-" * 20)
+    
+    # Commit 风格
+    current_style = current_config.get('commit', {}).get('style', 'conventional')
+    style_choices = ['conventional', 'semantic', 'simple', 'emoji']
+    click.echo(f"可选的提交风格: {', '.join(style_choices)}")
+    new_style = click.prompt('请选择提交消息风格', default=current_style, type=click.Choice(style_choices))
+    if 'commit' not in current_config:
+        current_config['commit'] = {}
+    current_config['commit']['style'] = new_style
+    
+    # 默认检查 bugs
+    current_check_bugs = current_config.get('commit', {}).get('check_bugs_by_default', False)
+    new_check_bugs = click.confirm('默认启用 bug 检查？', default=current_check_bugs)
+    current_config['commit']['check_bugs_by_default'] = new_check_bugs
+    
+    # 保存配置
+    click.echo("\n💾 保存配置...")
+    try:
+        config_module.save_config(current_config)
+        click.echo("✅ 配置已成功保存！")
+        
+        # 显示保存的配置摘要
+        click.echo("\n📋 配置摘要:")
+        click.echo("-" * 30)
+        click.echo(f"API Base URL: {current_config['api']['base_url']}")
+        click.echo(f"模型: {current_config['model']['name']}")
+        click.echo(f"提交风格: {current_config['commit']['style']}")
+        click.echo(f"默认 bug 检查: {'是' if current_config['commit']['check_bugs_by_default'] else '否'}")
+        
+    except Exception as e:
+        click.echo(f"❌ 保存配置时出错: {e}")
+
+
+def handle_config_command(set_value, get_key, list_all, interactive):
     """Implementation of the config command."""
+    
+    # 如果没有提供任何选项，启动交互式配置
+    if not any([set_value, get_key, list_all, interactive]):
+        interactive_config()
+        return
+    
+    # 如果明确指定了交互式模式
+    if interactive:
+        interactive_config()
+        return
     
     if set_value:
         # Parse key=value format
@@ -66,7 +173,4 @@ def handle_config_command(set_value, get_key, list_all):
                 else:
                     click.echo(f"{prefix}{key} = {value}")
         
-        print_config(app_config)
-        
-    else:
-        click.echo("Use --list to see all settings, --get key to get a value, or --set key=value to set a value") 
+        print_config(app_config) 
