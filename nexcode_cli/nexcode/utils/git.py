@@ -1,6 +1,56 @@
 import subprocess
 import click
 import fnmatch
+import os
+from pathlib import Path
+
+
+def find_git_root(start_path=None):
+    """
+    查找 Git 项目根目录
+    
+    Args:
+        start_path: 开始搜索的路径，默认为当前目录
+    
+    Returns:
+        Path 对象指向 Git 根目录，如果没有找到则返回 None
+    """
+    if start_path is None:
+        start_path = Path.cwd()
+    else:
+        start_path = Path(start_path)
+    
+    current = start_path.resolve()
+    
+    # 向上查找直到找到 .git 目录
+    while current != current.parent:
+        git_dir = current / '.git'
+        if git_dir.exists():
+            return current
+        current = current.parent
+    
+    return None
+
+
+def ensure_git_root():
+    """
+    确保当前在 Git 项目根目录
+    
+    Returns:
+        tuple: (git_root_path, original_cwd) 或 (None, None) 如果不在 Git 项目中
+    """
+    original_cwd = Path.cwd()
+    git_root = find_git_root()
+    
+    if git_root is None:
+        click.secho("Error: Not in a Git repository", fg="red")
+        return None, None
+    
+    if git_root != original_cwd:
+        click.echo(f"📁 Switching to Git root: {git_root}")
+        os.chdir(git_root)
+    
+    return git_root, original_cwd
 
 
 def run_git_command(command, dry_run=False, ai_helper_func=None):
