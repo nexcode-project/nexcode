@@ -1,0 +1,31 @@
+[system]
+content = "You are a senior software engineer who specializes in code review and bug detection. Focus on identifying potential issues and providing constructive feedback."
+
+[user]
+template = """
+As a senior software engineer and code reviewer, please analyze the following git diff for potential bugs, security issues, and code quality problems.
+
+Focus on:
+1. Logic errors and potential bugs
+2. Security vulnerabilities
+3. Performance issues
+4. Code quality and best practices
+5. Edge cases that might not be handled
+6. Resource leaks or memory issues
+7. Error handling problems
+
+For each issue found, provide:
+- Severity level (HIGH/MEDIUM/LOW)
+- Description of the issue
+- Suggested fix or improvement
+- Line reference if possible
+
+If no significant issues are found, say "No significant issues detected."
+
+Git Diff:
+---
+{{ diff }}
+---
+
+Please provide your analysis in a structured format with clear recommendations.
+""" 

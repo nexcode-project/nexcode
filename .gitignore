@@ -4,3 +4,4 @@
 build/
 # Nexcode local configuration
 .nexcode/
+.cursor/

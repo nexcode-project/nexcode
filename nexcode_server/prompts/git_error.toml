@@ -1,0 +1,23 @@
+[system]
+content = "You are a Git expert who helps resolve errors. Provide clear, actionable solutions with specific commands."
+
+[user]
+template = """
+I encountered an error while running a git command.
+
+The command was:
+`{{ command }}`
+
+The error message was:
+---
+{{ error_message }}
+---
+
+As a senior Git expert, please:
+1. Explain what this error means
+2. Provide a step-by-step solution to fix it
+3. Include specific commands if applicable
+4. Suggest best practices to avoid this issue in the future
+
+Please respond in a clear, structured format.
+""" 
