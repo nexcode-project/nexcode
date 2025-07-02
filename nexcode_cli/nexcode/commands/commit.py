@@ -101,6 +101,15 @@ def commit(message, style, auto):
     """智能生成提交消息并提交代码"""
     
     try:
+        # 首先添加所有变更文件
+        click.echo("📝 添加变更文件...")
+        try:
+            subprocess.run(['git', 'add', '.'], check=True)
+            click.echo("✅ 变更文件已添加到暂存区")
+        except subprocess.CalledProcessError as e:
+            click.echo(f"❌ 添加文件失败: {e}")
+            return
+        
         # 获取git diff
         diff = get_git_diff()
         if not diff:
@@ -125,6 +134,10 @@ def commit(message, style, auto):
                 return
             
             suggested_message = result.get('message', 'Auto-generated commit message')
+            
+            # 清理提交消息，确保简洁
+            suggested_message = clean_commit_message(suggested_message)
+            
             click.echo(f"💡 建议的提交消息: {suggested_message}")
             
             if auto:
@@ -137,9 +150,6 @@ def commit(message, style, auto):
         
         # 执行提交
         try:
-            # 添加所有变更文件
-            subprocess.run(['git', 'add', '.'], check=True)
-            
             # 提交
             subprocess.run(['git', 'commit', '-m', final_message], check=True)
             
@@ -152,4 +162,60 @@ def commit(message, style, auto):
         
     except Exception as e:
         click.echo(f"❌ 提交过程中出现错误: {str(e)}")
-        raise click.ClickException(str(e)) 
+        raise click.ClickException(str(e))
+
+
+def clean_commit_message(message):
+    """清理提交消息，确保简洁适合Git提交"""
+    if not message:
+        return "feat: update code"
+    
+    # 移除可能的JSON标记
+    message = message.replace('```json', '').replace('```', '').strip()
+    
+    # 尝试解析JSON（如果LLM返回了JSON格式）
+    import json
+    try:
+        parsed = json.loads(message)
+        if isinstance(parsed, dict) and 'commit_message' in parsed:
+            message = parsed['commit_message']
+        elif isinstance(parsed, dict) and 'message' in parsed:
+            message = parsed['message']
+    except:
+        pass  # 不是JSON，继续处理纯文本
+    
+    # 只取第一行作为提交消息
+    lines = message.strip().split('\n')
+    first_line = lines[0].strip()
+    
+    # 移除引号和其他格式标记
+    first_line = first_line.strip('"\'`')
+    
+    # 如果包含JSON结构标记，提取实际消息
+    if '{' in first_line or '}' in first_line:
+        # 尝试提取引号中的内容
+        import re
+        match = re.search(r'["\']([^"\']+)["\']', first_line)
+        if match:
+            first_line = match.group(1)
+        else:
+            # 如果没有找到，使用默认消息
+            first_line = "chore: update code"
+    
+    # 如果第一行太长，截断到合理长度
+    if len(first_line) > 72:
+        first_line = first_line[:69] + "..."
+    
+    # 如果没有conventional commits格式，尝试添加
+    if not any(first_line.startswith(prefix) for prefix in ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:']):
+        # 简单判断类型
+        if 'fix' in first_line.lower() or 'bug' in first_line.lower():
+            first_line = f"fix: {first_line}"
+        elif 'add' in first_line.lower() or 'new' in first_line.lower():
+            first_line = f"feat: {first_line}"
+        elif 'update' in first_line.lower() or 'modify' in first_line.lower():
+            first_line = f"refactor: {first_line}"
+        else:
+            first_line = f"chore: {first_line}"
+    
+    return first_line 

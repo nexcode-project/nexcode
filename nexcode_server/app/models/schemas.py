@@ -1,8 +1,14 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
+# 基础API配置模型 - CLI传递给服务端使用
+class APIConfigMixin(BaseModel):
+    api_key: Optional[str] = None  # CLI传递的API密钥，服务端复用
+    api_base_url: Optional[str] = None  # CLI传递的API基础URL
+    model_name: Optional[str] = None  # CLI传递的模型名称
+
 # Git错误分析
-class GitErrorRequest(BaseModel):
+class GitErrorRequest(APIConfigMixin):
     command: List[str]
     error_message: str
 
@@ -10,7 +16,7 @@ class GitErrorResponse(BaseModel):
     solution: str
     
 # 代码审查
-class CodeReviewRequest(BaseModel):
+class CodeReviewRequest(APIConfigMixin):
     diff: str
     check_type: Optional[str] = "general"  # general, security, performance, style
 
@@ -21,7 +27,7 @@ class CodeReviewResponse(BaseModel):
     severity: str = "info"  # info, warning, error
     
 # 提交消息生成
-class CommitMessageRequest(BaseModel):
+class CommitMessageRequest(APIConfigMixin):
     diff: str
     style: Optional[str] = "conventional"  # 提交消息风格
     context: Optional[Dict[str, Any]] = {}  # 额外上下文
@@ -30,7 +36,7 @@ class CommitMessageResponse(BaseModel):
     message: str
     
 # 提交相关问答
-class CommitQARequest(BaseModel):
+class CommitQARequest(APIConfigMixin):
     question: str
     context: Optional[Dict[str, Any]] = {}  # Git仓库上下文
 
@@ -38,7 +44,7 @@ class CommitQAResponse(BaseModel):
     answer: str
 
 # 代码质量检查（专门为check命令）
-class CodeQualityRequest(BaseModel):
+class CodeQualityRequest(APIConfigMixin):
     diff: str
     files: Optional[List[str]] = []
     check_types: List[str] = ["bugs", "security", "performance", "style"]
@@ -50,7 +56,7 @@ class CodeQualityResponse(BaseModel):
     summary: str
 
 # 推送策略分析
-class PushStrategyRequest(BaseModel):
+class PushStrategyRequest(APIConfigMixin):
     diff: str
     target_branch: str
     repository_type: Optional[str] = "github"
@@ -63,7 +69,7 @@ class PushStrategyResponse(BaseModel):
     warnings: List[str] = []
     
 # 仓库分析
-class RepositoryAnalysisRequest(BaseModel):
+class RepositoryAnalysisRequest(APIConfigMixin):
     repository_path: Optional[str] = None
     analysis_type: str = "overview"  # overview, structure, dependencies
 
@@ -73,7 +79,7 @@ class RepositoryAnalysisResponse(BaseModel):
     recommendations: List[str] = []
 
 # 智能问答（增强版）
-class IntelligentQARequest(BaseModel):
+class IntelligentQARequest(APIConfigMixin):
     question: str
     category: Optional[str] = "general"  # git, code, workflow, best_practices
     context: Optional[Dict[str, Any]] = {}
