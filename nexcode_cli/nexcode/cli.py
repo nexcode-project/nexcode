@@ -4,6 +4,7 @@ from .commands.push import handle_push_command
 from .commands.config_cmd import handle_config_command
 from .commands.check import handle_check_command
 from .commands.ask import handle_ask_command
+from .commands.diagnose import handle_diagnose_command
 
 
 @click.group()
@@ -62,6 +63,12 @@ def check(staged, check_all, target_file):
 def ask(question, interactive):
     """Ask AI assistant about Git commits, version control, or development workflows."""
     handle_ask_command(question, interactive)
+
+
+@cli.command()
+def diagnose():
+    """Diagnose and get AI assistance for Git repository issues."""
+    handle_diagnose_command()
 
 
 if __name__ == '__main__':
