@@ -1,17 +1,20 @@
 import os
 import click
 import shlex
+import subprocess
 from ..config import config as app_config
-from ..utils.git import get_git_diff, smart_git_add, ensure_git_root
-from ..llm.services import check_code_for_bugs
-from ..prompt.generators import generate_commit_message
-from ..llm.services import get_ai_solution_for_git_error
+from ..utils.git import get_git_diff, smart_git_add, ensure_git_root, get_current_branch, get_remote_branches
+from ..api.client import api_client
 
 
 def run_git_command_with_ai(command, dry_run=False):
     """Git command wrapper that includes AI error assistance."""
     from ..utils.git import run_git_command
-    return run_git_command(command, dry_run=dry_run, ai_helper_func=get_ai_solution_for_git_error)
+    
+    def ai_helper(cmd, error_msg):
+        return api_client.git_error_analysis(cmd, error_msg)
+    
+    return run_git_command(command, dry_run=dry_run, ai_helper_func=ai_helper)
 
 
 def get_push_command(target_branch, new_branch=None):
@@ -115,21 +118,24 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
 
         # Run bug check if requested or configured by default
         if should_check_bugs and not dry_run:
-            click.echo("› Running bug analysis...")
-            analysis = check_code_for_bugs(diff)
+            click.echo("› Running comprehensive code quality analysis...")
+            quality_result = api_client.code_quality_check(diff)
             
-            click.secho("\n🔍 Bug Analysis Results:", fg="blue", bold=True)
+            click.secho("\n🔍 Code Quality Analysis Results:", fg="blue", bold=True)
             click.echo("-" * 40)
+            analysis = quality_result.get("summary", "No analysis available")
             click.echo(analysis)
+            overall_score = quality_result.get("overall_score", 0.0)
+            click.echo(f"\nOverall Quality Score: {overall_score}/10.0")
             click.echo("-" * 40)
             
-            # Ask user if they want to continue
-            if "No significant issues detected" not in analysis:
-                if not click.confirm("\nIssues detected. Do you want to continue with the push?", default=False):
-                    click.echo("Push cancelled due to code issues.")
+            # Ask user if they want to continue based on score
+            if overall_score < 6.0:
+                if not click.confirm("\nCode quality issues detected. Do you want to continue with the push?", default=False):
+                    click.echo("Push cancelled due to code quality issues.")
                     return
             else:
-                click.echo("✅ No significant issues detected!")
+                click.echo("✅ Code quality looks good!")
         elif should_check_bugs and dry_run:
             click.echo("› [DRY RUN] Would run bug analysis here...")
             
@@ -138,7 +144,8 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
         click.echo(f"› Generating commit message with AI ({used_style} style)...")
         
         if not dry_run:
-            commit_message = generate_commit_message(diff, style)
+            # 使用服务端API生成提交消息
+            commit_message = api_client.generate_commit_message(diff, used_style)
         else:
             # Generate example message based on style for dry run
             style_examples = {
@@ -149,9 +156,12 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
             }
             commit_message = style_examples.get(used_style, "[DRY RUN] feat: example commit message")
 
-        if not commit_message:
-            click.echo("✗ Failed to generate commit message. Aborting push.")
-            return
+        if not commit_message or commit_message.startswith("Failed to connect") or commit_message.startswith("Error"):
+            if not dry_run:
+                click.echo(f"✗ Failed to generate commit message: {commit_message}")
+                click.echo("Please check your server connection and configuration.")
+                return
+            # For dry run, continue with example message
 
         click.echo(f"✓ Generated commit message:\n  {commit_message}")
         
@@ -200,3 +210,106 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
         # 切换回原始目录
         if original_cwd and original_cwd != git_root:
             os.chdir(original_cwd) 
+
+
+@click.command()
+@click.option('--branch', default=None, help='目标分支 (默认为origin/main)')
+@click.option('--message', '-m', default=None, help='提交消息')
+@click.option('--auto-commit', is_flag=True, help='自动生成提交消息并提交')
+@click.option('--dry-run', is_flag=True, help='仅显示将要执行的操作，不实际执行')
+def push(branch, message, auto_commit, dry_run):
+    """智能推送代码"""
+    
+    try:
+        # 获取当前分支
+        current_branch = get_current_branch()
+        if not current_branch:
+            click.echo("❌ 无法获取当前分支信息")
+            return
+        
+        # 确定目标分支
+        target_branch = branch or "main"
+        
+        # 获取git diff
+        diff = get_git_diff()
+        if not diff:
+            click.echo("❌ 没有发现代码变更")
+            return
+        
+        click.echo(f"🚀 正在分析推送策略...")
+        click.echo(f"当前分支: {current_branch}")
+        click.echo(f"目标分支: {target_branch}")
+        
+        # 调用API服务进行推送策略分析
+        result = api_client.analyze_push_strategy(
+            diff=diff,
+            target_branch=target_branch,
+            current_branch=current_branch,
+            repository_type="github"  # 可以从配置中获取
+        )
+        
+        if 'error' in result:
+            click.echo(f"❌ 推送策略分析失败: {result['error']}")
+            return
+        
+        # 获取推荐的提交消息
+        suggested_message = result.get('commit_message', 'Auto-generated commit message')
+        push_command = result.get('push_command', f'git push origin {current_branch}')
+        pre_push_checks = result.get('pre_push_checks', [])
+        warnings = result.get('warnings', [])
+        
+        # 显示推送策略
+        click.echo(f"\n📋 推送策略:")
+        click.echo(f"建议提交消息: {suggested_message}")
+        click.echo(f"推送命令: {push_command}")
+        
+        # 显示预检查项
+        if pre_push_checks:
+            click.echo(f"\n✅ 推送前检查项:")
+            for i, check in enumerate(pre_push_checks, 1):
+                click.echo(f"  {i}. {check}")
+        
+        # 显示警告
+        if warnings:
+            click.echo(f"\n⚠️  警告:")
+            for warning in warnings:
+                click.echo(f"  • {warning}")
+        
+        if dry_run:
+            click.echo(f"\n🏃 Dry Run模式 - 不会实际执行推送")
+            return
+        
+        # 处理提交
+        if auto_commit or not message:
+            final_message = message or suggested_message
+            
+            # 确认提交消息
+            if not auto_commit:
+                if not click.confirm(f"使用建议的提交消息吗?\n消息: {final_message}"):
+                    final_message = click.prompt("请输入提交消息")
+            
+            # 执行提交
+            try:
+                subprocess.run(['git', 'add', '.'], check=True)
+                subprocess.run(['git', 'commit', '-m', final_message], check=True)
+                click.echo(f"✅ 代码已提交: {final_message}")
+            except subprocess.CalledProcessError as e:
+                click.echo(f"❌ 提交失败: {e}")
+                return
+        
+        # 确认推送
+        if click.confirm(f"执行推送吗?\n命令: {push_command}"):
+            try:
+                # 解析推送命令并执行
+                cmd_parts = push_command.split()
+                subprocess.run(cmd_parts, check=True)
+                click.echo("✅ 代码推送成功!")
+            except subprocess.CalledProcessError as e:
+                click.echo(f"❌ 推送失败: {e}")
+                return
+        else:
+            click.echo("推送已取消")
+        
+    except Exception as e:
+        click.echo(f"❌ 推送过程中出现错误: {str(e)}")
+        raise click.ClickException(str(e)) 

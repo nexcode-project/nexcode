@@ -130,7 +130,7 @@ def init_local_config():
         click.echo(f"❌ 初始化本地配置时出错: {e}")
 
 
-def handle_config_command(set_value, get_key, list_all, interactive, init_local):
+def handle_config_command(config_set, config_get, list_config, interactive, init_local):
     """Implementation of the config command."""
     
     # 初始化本地配置
@@ -139,7 +139,7 @@ def handle_config_command(set_value, get_key, list_all, interactive, init_local)
         return
     
     # 如果没有提供任何选项，启动交互式配置
-    if not any([set_value, get_key, list_all, interactive]):
+    if not any([config_set, config_get, list_config, interactive]):
         interactive_config()
         return
     
@@ -148,13 +148,13 @@ def handle_config_command(set_value, get_key, list_all, interactive, init_local)
         interactive_config()
         return
     
-    if set_value:
+    if config_set:
         # Parse key=value format
-        if '=' not in set_value:
+        if '=' not in config_set:
             click.echo("Error: Use format key=value (e.g. commit.check_bugs_by_default=true)")
             return
             
-        key, value = set_value.split('=', 1)
+        key, value = config_set.split('=', 1)
         
         # Parse boolean values
         if value.lower() in ('true', 'false'):
@@ -185,19 +185,19 @@ def handle_config_command(set_value, get_key, list_all, interactive, init_local)
         except Exception as e:
             click.echo(f"Error saving configuration: {e}")
             
-    elif get_key:
+    elif config_get:
         # Get nested key value
-        keys = get_key.split('.')
+        keys = config_get.split('.')
         current = app_config
         
         try:
             for k in keys:
                 current = current[k]
-            click.echo(f"{get_key} = {current}")
+            click.echo(f"{config_get} = {current}")
         except KeyError:
-            click.echo(f"Configuration key '{get_key}' not found")
+            click.echo(f"Configuration key '{config_get}' not found")
             
-    elif list_all:
+    elif list_config:
         click.echo("Current configuration:")
         click.echo("-" * 40)
         

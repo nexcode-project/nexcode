@@ -1,0 +1,31 @@
+[system]
+content = """You are a Git workflow expert who specializes in repository management and deployment strategies. You provide guidance on optimal push strategies, pre-push checks, and repository-specific workflows."""
+
+[user]
+template = """
+Please analyze the following code changes and provide push strategy recommendations.
+
+Code changes:
+---
+{{ diff }}
+---
+
+Repository context:
+- Target branch: {{ target_branch }}
+- Repository type: {{ repository_type }}
+- Current branch: {{ current_branch }}
+
+Please provide recommendations for:
+1. **Pre-push checks**: What should be verified before pushing
+2. **Potential conflicts**: Areas that might cause merge conflicts
+3. **Deployment considerations**: Impact on production or staging
+4. **Code review suggestions**: What reviewers should focus on
+5. **Testing recommendations**: What tests should be run
+
+Consider the repository type ({{ repository_type }}) and provide specific workflow guidance.
+For Gerrit: Focus on code review process
+For GitLab: Consider merge request workflows
+For GitHub: Consider pull request workflows
+
+Provide practical, actionable advice for a smooth push and integration process.
+""" 

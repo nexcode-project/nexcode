@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1 import router as v1_router
 from app.core.config import settings
+from app.models.schemas import HealthCheckResponse
+from datetime import datetime
 
 app = FastAPI(
     title="NexCode LLM Proxy Server",
@@ -32,10 +34,24 @@ async def root():
         "docs_url": "/docs"
     }
 
-@app.get("/health")
+@app.get("/health", response_model=HealthCheckResponse)
 async def health_check():
-    """服务健康检查"""
-    return {"status": "healthy"}
+    """详细的服务健康检查"""
+    return HealthCheckResponse(
+        status="healthy",
+        version="1.0.0",
+        services={
+            "git_error_analysis": "operational",
+            "code_review": "operational", 
+            "commit_message": "operational",
+            "commit_qa": "operational",
+            "code_quality": "operational",
+            "push_strategy": "operational",
+            "intelligent_qa": "operational",
+            "repository_analysis": "operational"
+        },
+        timestamp=datetime.now().isoformat()
+    )
 
 if __name__ == "__main__":
     import uvicorn

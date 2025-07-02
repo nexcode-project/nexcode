@@ -38,6 +38,7 @@ REQUIRE_AUTH=true
 HOST=0.0.0.0
 PORT=8000
 ```
+test
 
 ### 3. 启动服务端
 

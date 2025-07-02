@@ -1,0 +1,138 @@
+"""
+API客户端模块
+统一管理所有后端API请求
+"""
+
+import requests
+from typing import Dict, Any, Optional, List
+
+from ..config import get_merged_config
+from .endpoints import ENDPOINTS
+
+
+class NexCodeAPIClient:
+    """统一的API客户端"""
+    
+    def __init__(self):
+        self.config = get_merged_config()
+        self.base_url = self.config.get('api_server', {}).get('url', 'http://localhost:8000')
+        self.token = self.config.get('api_server', {}).get('token')
+        
+        # API配置 - 将传递给服务端使用
+        # 优先使用api配置，如果没有则尝试兼容旧的配置结构
+        api_config = self.config.get('api', {})
+        openai_config = self.config.get('openai', {})  # 兼容旧配置
+        
+        self.api_config = {
+            'api_key': api_config.get('key') or openai_config.get('api_key'),
+            'api_base_url': api_config.get('base_url') or openai_config.get('api_base_url'),
+            'model_name': self.config.get('model', {}).get('name') or openai_config.get('model')
+        }
+        
+        self.headers = {
+            'Content-Type': 'application/json',
+        }
+        if self.token:
+            self.headers['Authorization'] = f'Bearer {self.token}'
+    
+    def _add_api_config(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """向请求数据中添加API配置"""
+        return {**data, **self.api_config}
+    
+    def _make_request(self, method: str, endpoint: str, data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """统一的API请求方法"""
+        url = f"{self.base_url.rstrip('/')}{endpoint}"
+        
+        # 添加API配置到请求数据
+        if data:
+            data = self._add_api_config(data)
+        
+        try:
+            if method.upper() == 'GET':
+                response = requests.get(url, headers=self.headers, timeout=30)
+            elif method.upper() == 'POST':
+                response = requests.post(url, headers=self.headers, json=data, timeout=30)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+            
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            return {"error": f"Request failed: {str(e)}"}
+    
+    def health_check(self) -> Dict[str, Any]:
+        """健康检查"""
+        return self._make_request('GET', ENDPOINTS['health'])
+    
+    def check_code_quality(self, diff: str, files: List[str] = None, check_types: List[str] = None) -> Dict[str, Any]:
+        """代码质量检查"""
+        data = {
+            'diff': diff,
+            'files': files or [],
+            'check_types': check_types or ['bugs', 'security', 'performance', 'style']
+        }
+        return self._make_request('POST', ENDPOINTS['code_quality'], data)
+    
+    def ask_question(self, question: str, category: str = 'general', context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """智能问答"""
+        data = {
+            'question': question,
+            'category': category,
+            'context': context or {}
+        }
+        return self._make_request('POST', ENDPOINTS['intelligent_qa'], data)
+    
+    def analyze_git_error(self, command: List[str], error_message: str) -> Dict[str, Any]:
+        """Git错误分析"""
+        data = {
+            'command': command,
+            'error_message': error_message
+        }
+        return self._make_request('POST', ENDPOINTS['git_error'], data)
+    
+    def generate_commit_message(self, diff: str, style: str = 'conventional', context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """生成提交消息"""
+        data = {
+            'diff': diff,
+            'style': style,
+            'context': context or {}
+        }
+        return self._make_request('POST', ENDPOINTS['commit_message'], data)
+    
+    def analyze_push_strategy(self, diff: str, target_branch: str, current_branch: str, repository_type: str = 'github') -> Dict[str, Any]:
+        """推送策略分析"""
+        data = {
+            'diff': diff,
+            'target_branch': target_branch,
+            'current_branch': current_branch,
+            'repository_type': repository_type
+        }
+        return self._make_request('POST', ENDPOINTS['push_strategy'], data)
+    
+    def review_code(self, diff: str, check_type: str = 'general') -> Dict[str, Any]:
+        """代码审查"""
+        data = {
+            'diff': diff,
+            'check_type': check_type
+        }
+        return self._make_request('POST', ENDPOINTS['code_review'], data)
+    
+    def commit_qa(self, question: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """提交相关问答"""
+        data = {
+            'question': question,
+            'context': context or {}
+        }
+        return self._make_request('POST', ENDPOINTS['commit_qa'], data)
+    
+    def analyze_repository(self, repository_path: str = None, analysis_type: str = 'overview') -> Dict[str, Any]:
+        """仓库分析"""
+        data = {
+            'repository_path': repository_path,
+            'analysis_type': analysis_type
+        }
+        return self._make_request('POST', ENDPOINTS['repository_analysis'], data)
+
+
+# 全局API客户端实例
+api_client = NexCodeAPIClient() 

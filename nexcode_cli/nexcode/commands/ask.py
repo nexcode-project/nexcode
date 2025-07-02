@@ -1,73 +1,40 @@
 import click
-from ..llm.services import ask_ai_about_commits
+from ..api.client import api_client
 
-
-def handle_ask_command(question, interactive):
-    """Implementation of the ask command."""
+@click.command()
+@click.argument('question', required=True)
+@click.option('--category', default='general', 
+              help='Question category: git, code, workflow, best_practices, or general')
+def ask(question, category):
+    """向NexCode AI助手提问"""
+    click.echo(f"🤔 正在处理您的问题: {question}")
     
-    if interactive:
-        # Interactive mode - keep asking questions until user exits
-        click.echo("🤖 AI Git Assistant - Interactive Mode")
-        click.echo("Ask me anything about Git commits, version control, or development workflows!")
-        click.echo("Type 'exit', 'quit', or press Ctrl+C to stop.\n")
+    try:
+        # 调用API服务进行智能问答
+        result = api_client.ask_question(question, category)
         
-        while True:
-            try:
-                user_question = click.prompt("❓ Your question", type=str)
-                
-                if user_question.lower() in ['exit', 'quit', 'q']:
-                    click.echo("👋 Goodbye! Happy coding!")
-                    break
-                
-                if not user_question.strip():
-                    click.echo("Please enter a question.")
-                    continue
-                
-                click.echo("\n🤔 Let me think about this...")
-                
-                # Show a simple progress indicator
-                import time
-                for i in range(3):
-                    click.echo("  " + "." * (i + 1), nl=False)
-                    time.sleep(0.3)
-                click.echo("")
-                
-                # Get AI response
-                answer = ask_ai_about_commits(user_question)
-                
-                click.secho("\n💡 AI Assistant Response:", fg="green", bold=True)
-                click.echo("=" * 50)
-                click.echo(answer)
-                click.echo("=" * 50)
-                click.echo()
-                
-            except KeyboardInterrupt:
-                click.echo("\n👋 Goodbye! Happy coding!")
-                break
-            except Exception as e:
-                click.echo(f"\nError: {e}")
-                continue
-    
-    else:
-        # Single question mode
-        if not question:
-            click.echo("Error: Please provide a question using --question or use --interactive mode.")
+        if 'error' in result:
+            click.echo(f"❌ 问答失败: {result['error']}")
             return
         
-        click.echo(f"❓ Question: {question}")
-        click.echo("\n🤔 Getting AI response...")
+        # 显示回答
+        answer = result.get('answer', '抱歉，无法获取答案')
+        click.echo(f"\n💬 回答:\n{answer}")
         
-        # Show a simple progress indicator
-        import time
-        for i in range(3):
-            click.echo("  " + "." * (i + 1), nl=False)
-            time.sleep(0.3)
-        click.echo("")
+        # 显示相关主题
+        related_topics = result.get('related_topics', [])
+        if related_topics:
+            click.echo(f"\n🔗 相关主题:")
+            for i, topic in enumerate(related_topics, 1):
+                click.echo(f"  {i}. {topic}")
         
-        # Get AI response
-        answer = ask_ai_about_commits(question)
+        # 显示建议操作
+        suggested_actions = result.get('suggested_actions', [])
+        if suggested_actions:
+            click.echo(f"\n💡 建议操作:")
+            for i, action in enumerate(suggested_actions, 1):
+                click.echo(f"  {i}. {action}")
         
-        click.secho("\n💡 AI Assistant Response:", fg="green", bold=True)
-        click.echo("=" * 60)
-        click.echo(answer)
-        click.echo("=" * 60) 
+    except Exception as e:
+        click.echo(f"❌ 处理问题时出现错误: {str(e)}")
+        raise click.ClickException(str(e)) 

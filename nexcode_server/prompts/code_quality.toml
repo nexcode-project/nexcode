@@ -1,0 +1,30 @@
+[system]
+content = """You are a senior code reviewer and quality analyst. You specialize in identifying potential bugs, security vulnerabilities, performance issues, and style violations in code changes. Provide comprehensive analysis with actionable recommendations."""
+
+[user]
+template = """
+Please perform a comprehensive code quality analysis on the following code changes.
+
+Git diff:
+---
+{{ diff }}
+---
+
+Files to analyze: {{ files }}
+Check types requested: {{ check_types }}
+
+Please analyze the code for:
+1. **Bugs**: Logic errors, null pointer exceptions, off-by-one errors, etc.
+2. **Security**: SQL injection, XSS, authentication issues, data exposure
+3. **Performance**: Inefficient algorithms, memory leaks, unnecessary loops
+4. **Style**: Code formatting, naming conventions, documentation
+
+For each issue found, please provide:
+- Severity level (critical, high, medium, low)
+- Description of the issue
+- Location in the code
+- Suggested fix
+- Best practice recommendation
+
+Focus on practical, actionable feedback that will help improve code quality.
+""" 

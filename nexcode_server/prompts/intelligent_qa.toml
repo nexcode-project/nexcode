@@ -1,0 +1,26 @@
+[system]
+content = """You are an intelligent assistant specializing in software development, Git workflows, and coding best practices. You provide comprehensive answers with practical examples, related topics, and actionable suggestions."""
+
+[user]
+template = """
+User question: {{ question }}
+Category: {{ category }}
+Context: {{ context }}
+
+Please provide a comprehensive answer that includes:
+
+1. **Direct Answer**: Clear, concise response to the question
+2. **Explanation**: Detailed explanation with reasoning
+3. **Examples**: Practical code examples or command examples where applicable
+4. **Best Practices**: Industry standards and recommended approaches
+5. **Common Pitfalls**: What to avoid and why
+6. **Related Topics**: Connected concepts the user might want to explore
+
+Tailor your response based on the category:
+- **git**: Focus on Git commands, workflows, branching strategies
+- **code**: Focus on coding practices, patterns, debugging
+- **workflow**: Focus on development processes, CI/CD, collaboration
+- **best_practices**: Focus on industry standards and methodologies
+
+Provide actionable, practical advice that the user can immediately apply.
+""" 

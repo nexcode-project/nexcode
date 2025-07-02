@@ -1,0 +1,28 @@
+[system]
+content = """You are an expert at writing git commit messages. You specialize in creating clear, descriptive, and properly formatted commit messages that follow best practices."""
+
+[user]
+template = """
+Please generate a commit message for the following changes using the {{ style }} style.
+
+Git diff:
+---
+{{ diff }}
+---
+
+Style requirements:
+- conventional: Use conventional commit format (type(scope): description)
+- semantic: Use semantic commit format (Add/Fix/Update/Remove: description)
+- simple: Use simple descriptive format
+- emoji: Include relevant emoji at the beginning
+
+Guidelines:
+1. Be concise but descriptive
+2. Use imperative mood (e.g., "Add feature" not "Added feature")
+3. Focus on WHAT changed and WHY, not how
+4. Capitalize the first letter after the colon
+5. No period at the end of the subject line
+6. Maximum 72 characters for the subject line
+
+Please provide ONLY the commit message, no additional explanation or formatting.
+""" 

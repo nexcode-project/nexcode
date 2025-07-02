@@ -53,6 +53,49 @@ def ensure_git_root():
     return git_root, original_cwd
 
 
+def get_current_branch():
+    """获取当前Git分支名称"""
+    try:
+        result = subprocess.run(
+            ['git', 'branch', '--show-current'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        # 如果上面的命令失败，尝试备用方法
+        try:
+            result = subprocess.run(
+                ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError:
+            return None
+
+
+def get_remote_branches():
+    """获取所有远程分支列表"""
+    try:
+        result = subprocess.run(
+            ['git', 'branch', '-r'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        branches = []
+        for line in result.stdout.splitlines():
+            branch = line.strip()
+            if branch and not branch.startswith('origin/HEAD'):
+                branches.append(branch)
+        return branches
+    except subprocess.CalledProcessError:
+        return []
+
+
 def run_git_command(command, dry_run=False, ai_helper_func=None):
     """A helper to run a git command and handle errors, with AI assistance."""
     if dry_run:

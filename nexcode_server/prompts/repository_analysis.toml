@@ -1,0 +1,40 @@
+[system]
+content = """You are a repository architecture analyst who specializes in evaluating codebase structure, dependencies, and providing optimization recommendations for software projects."""
+
+[user]
+template = """
+Please analyze the repository and provide insights based on the requested analysis type.
+
+Repository path: {{ repository_path }}
+Analysis type: {{ analysis_type }}
+
+Based on the analysis type, please provide:
+
+**For 'overview' analysis:**
+- Overall project health assessment
+- Development activity patterns
+- Code organization quality
+- Maintenance recommendations
+
+**For 'structure' analysis:**
+- Directory and file organization evaluation
+- Module/package structure assessment
+- Architectural patterns identified
+- Structure improvement suggestions
+
+**For 'dependencies' analysis:**
+- Dependency tree evaluation
+- Security vulnerability assessment
+- Update recommendations
+- Optimization opportunities
+
+Please provide:
+1. **Summary**: High-level assessment
+2. **Strengths**: What's working well
+3. **Areas for Improvement**: Specific issues identified
+4. **Recommendations**: Actionable steps for improvement
+5. **Best Practices**: Industry standards to consider
+6. **Next Steps**: Prioritized action items
+
+Focus on practical, actionable insights that will help improve the repository's maintainability and quality.
+""" 

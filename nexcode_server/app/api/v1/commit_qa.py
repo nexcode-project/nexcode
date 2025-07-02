@@ -6,17 +6,17 @@ from app.core.auth import get_auth_dependency
 router = APIRouter()
 
 @router.post("/commit-qa/", response_model=CommitQAResponse, tags=["Commit QA"])
-async def handle_commit_qa(req: CommitQARequest, _: bool = Depends(get_auth_dependency())):
+async def commit_qa(req: CommitQARequest, _: bool = Depends(get_auth_dependency())):
     """
-    处理 Commit 相关问答请求
-    
-    接收用户问题，返回 AI 生成的回答
+    提交相关问答
     """
     # 准备传递给 LLM 的数据
     context = {
-        "question": req.question
+        "question": req.question,
+        "context": req.context
     }
     
-    # 调用 LLM 获取回答，传递客户端的 API 密钥
-    answer = get_llm_solution("commit_qa", context, req.api_key)
+    # 调用 LLM 获取答案
+    answer = get_llm_solution("commit_qa", context)
+    
     return CommitQAResponse(answer=answer) 
