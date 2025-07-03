@@ -7,15 +7,19 @@ from .code_quality import router as code_quality_router
 from .push_strategy import router as push_strategy_router
 from .intelligent_qa import router as intelligent_qa_router
 from .repository_analysis import router as repository_analysis_router
+from .openai_compatible import router as openai_router
 
 router = APIRouter()
 
-# 注册所有子路由
-router.include_router(git_error_router)
-router.include_router(code_review_router)
-router.include_router(commit_qa_router)
-router.include_router(commit_message_router)
-router.include_router(code_quality_router)
-router.include_router(push_strategy_router)
-router.include_router(intelligent_qa_router)
-router.include_router(repository_analysis_router) 
+# 注册业务API路由
+router.include_router(git_error_router, tags=["git_error"])
+router.include_router(code_review_router, tags=["code_review"])
+router.include_router(commit_qa_router, tags=["commit_qa"])
+router.include_router(commit_message_router, tags=["commit_message"])
+router.include_router(code_quality_router, tags=["code_quality"])
+router.include_router(push_strategy_router, tags=["push_strategy"])
+router.include_router(intelligent_qa_router, tags=["intelligent_qa"])
+router.include_router(repository_analysis_router, tags=["repository_analysis"])
+
+# 注册OpenAI兼容API路由
+router.include_router(openai_router, tags=["openai_compatible"]) 

@@ -31,7 +31,12 @@ async def root():
     return {
         "message": "NexCode LLM Proxy Server is running",
         "version": "1.0.0",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
+        "openai_compatible": True,
+        "openai_endpoints": [
+            "/v1/chat/completions",
+            "/v1/completions"
+        ]
     }
 
 @app.get("/health", response_model=HealthCheckResponse)
@@ -48,7 +53,8 @@ async def health_check():
             "code_quality": "operational",
             "push_strategy": "operational",
             "intelligent_qa": "operational",
-            "repository_analysis": "operational"
+            "repository_analysis": "operational",
+            "openai_compatible_api": "operational"
         },
         timestamp=datetime.now().isoformat()
     )
