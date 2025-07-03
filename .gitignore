@@ -5,3 +5,4 @@ build/
 # Nexcode local configuration
 .nexcode/
 .cursor/
+__pycache__/
