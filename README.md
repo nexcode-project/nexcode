@@ -101,9 +101,6 @@ nexcode commit --dry-run
 ### 代码问答
 
 ```bash
-# 询问代码相关问题
-nexcode ask "如何优化这个函数的性能？"
-
 # 询问特定文件
 nexcode ask "这个文件的主要功能是什么？" --files src/main.py
 ```
