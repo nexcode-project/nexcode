@@ -111,7 +111,7 @@ async def completions(
         
         # 调用扩展的LLM API（作为简单的文本补全）
         completion_content = call_llm_api_with_params(
-            system_content="",
+            system_content="你是一个专业的代码补全助手，请根据用户的问题，给出最准确的代码补全。",
             user_content=prompt,
             api_key=api_key,
             model_name=request.model,
