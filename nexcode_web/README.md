@@ -1,5 +1,9 @@
 # NexCode Web Application
 
+<div align="center">
+  <img src="../logo.png" alt="NexCode Logo" width="200">
+</div>
+
 一个现代化的 React/Next.js Web 应用，为 NexCode AI 助手提供用户界面。
 
 ## 🚀 功能特性

@@ -1,5 +1,9 @@
 # NexCode
 
+<div align="center">
+  <img src="logo.png" alt="NexCode Logo" width="200">
+</div>
+
 一个基于大语言模型的智能代码辅助工具，提供代码审查、自动提交消息生成、问答等功能。
 
 ## 🌟 主要特性

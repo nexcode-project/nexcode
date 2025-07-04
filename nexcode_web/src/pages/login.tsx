@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
 import { Bot, LogIn, User, Lock, Eye, EyeOff } from 'lucide-react';
 
@@ -56,16 +57,18 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <>
+      <Head>
+        <title>登录 - NexCode</title>
+      </Head>
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
-            <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center">
-              <Bot className="w-8 h-8 text-white" />
-            </div>
+            <img src="/logo.png" alt="NexCode" className="h-20 w-auto" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            登录 NexCode
+            登录
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
             智能AI编程助手，提升您的开发效率

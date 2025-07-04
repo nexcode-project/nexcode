@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
 import { Bot, MessageSquare, Settings, Zap } from 'lucide-react';
 
@@ -26,17 +27,19 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100">
+    <>
+      <Head>
+        <title>NexCode - 智能AI编程助手</title>
+      </Head>
+      <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
         {/* Hero Section */}
         <div className="text-center">
           <div className="flex justify-center mb-8">
-            <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center">
-              <Bot className="w-8 h-8 text-white" />
-            </div>
+            <img src="/logo.png" alt="NexCode" className="h-24 w-auto" />
           </div>
           <h1 className="text-4xl sm:text-6xl font-bold text-gray-900 mb-6">
-            <span className="text-primary-600">NexCode</span> AI 助手
+            AI 助手
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
             智能代码助手，帮助您提高开发效率。支持代码生成、审查、错误诊断和智能对话。
@@ -106,6 +109,7 @@ export default function Home() {
           </button>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 } 

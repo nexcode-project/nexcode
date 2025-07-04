@@ -21,7 +21,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <h1 className="text-xl font-bold text-primary-600">NexCode</h1>
+                <img src="/logo.png" alt="NexCode" className="h-10 w-auto" />
               </div>
               <div className="hidden md:block ml-10">
                 <div className="flex space-x-8">
