@@ -295,7 +295,6 @@ def push(branch, message, auto_commit, dry_run):
             if not auto_commit:
                 if not click.confirm(f"使用建议的提交消息吗?\n消息: {final_message}"):
                     final_message = click.prompt("请输入提交消息")
-                    final_message = clean_commit_message(final_message)
             
             # 执行提交
             try:
