@@ -59,6 +59,7 @@ def call_llm_api(system_content: str, user_content: str,
             ],
             max_tokens=settings.MAX_TOKENS,
             temperature=settings.TEMPERATURE,
+            response_format={"type": "json_object"}
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
