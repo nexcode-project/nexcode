@@ -36,7 +36,7 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center">
           <div className="flex justify-center mb-8">
-            <img src="/logo.png" alt="NexCode" className="h-24 w-auto" />
+            <img src="/logo.png" alt="NexCode" className="h-24 w-auto rounded-2xl shadow-lg" />
           </div>
           <h1 className="text-4xl sm:text-6xl font-bold text-gray-900 mb-6">
             AI 助手

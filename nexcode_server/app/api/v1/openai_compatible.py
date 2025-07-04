@@ -8,6 +8,7 @@ from app.models.openai_schemas import (
 )
 from app.core.llm_client import call_llm_api_with_params
 from app.core.config import settings
+from app.core.token_counter import count_tokens, count_messages_tokens
 
 router = APIRouter()
 
@@ -15,20 +16,27 @@ def _generate_id() -> str:
     """生成唯一的请求ID"""
     return f"chatcmpl-{uuid.uuid4().hex[:16]}"
 
-def _calculate_tokens(text: str) -> int:
-    """简单的token计算（实际应该使用tiktoken）"""
-    # 这是一个简化的实现，实际应该使用tiktoken库
-    return int(len(text.split()) * 1.3)  # 粗略估算
-
-def _create_usage(prompt: str, completion: str) -> Usage:
-    """创建使用统计"""
-    prompt_tokens = _calculate_tokens(prompt)
-    completion_tokens = _calculate_tokens(completion)
-    return Usage(
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        total_tokens=prompt_tokens + completion_tokens
-    )
+def _create_usage(prompt: str, completion: str, model_name: str = "gpt-3.5-turbo") -> Usage:
+    """创建usage统计（使用tiktoken精确计算）"""
+    try:
+        prompt_tokens = count_tokens(prompt, model_name)
+        completion_tokens = count_tokens(completion, model_name)
+        total_tokens = prompt_tokens + completion_tokens
+        
+        return Usage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens
+        )
+    except Exception as e:
+        # 回退到简单估算
+        prompt_tokens = int(len(prompt.split()) * 1.3)
+        completion_tokens = int(len(completion.split()) * 1.3)
+        return Usage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens
+        )
 
 async def verify_auth(authorization: Optional[str] = Header(None)):
     """验证认证"""
@@ -87,7 +95,8 @@ async def chat_completions(
         
         usage = _create_usage(
             prompt=system_content + "\n" + user_content,
-            completion=completion_content
+            completion=completion_content,
+            model_name=request.model
         )
         
         return ChatCompletionResponse(
@@ -132,7 +141,8 @@ async def completions(
         
         usage = _create_usage(
             prompt=prompt,
-            completion=completion_content
+            completion=completion_content,
+            model_name=request.model
         )
         
         return CompletionResponse(

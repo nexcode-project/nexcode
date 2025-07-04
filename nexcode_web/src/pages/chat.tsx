@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
 import Chat from '@/components/Chat';
 
@@ -26,8 +27,13 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="px-4 sm:px-6 lg:px-8">
-      <Chat />
-    </div>
+    <>
+      <Head>
+        <title>智能对话 - NexCode</title>
+      </Head>
+      <div className="px-4 sm:px-6 lg:px-8">
+        <Chat />
+      </div>
+    </>
   );
 } 

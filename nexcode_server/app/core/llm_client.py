@@ -2,6 +2,7 @@ import openai
 from typing import Dict, Any, Optional, Union, List
 from .config import settings
 from .prompt_loader import get_rendered_prompts
+from .token_counter import count_tokens, count_messages_tokens, estimate_total_tokens
 
 def get_openai_client(api_key: Optional[str] = None, api_base_url: Optional[str] = None):
     """
@@ -147,7 +148,40 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
         str: LLM 响应结果
     """
     try:
+        print(f"\n=== LLM DEBUG ({task_type}) ===")
+        print(f"Data keys: {list(data.keys())}")
+        
         system_content, user_content = get_rendered_prompts(task_type, data)
-        return call_llm_api(system_content, user_content, api_key, api_base_url, model_name)
+        
+        print(f"System prompt length: {len(system_content)}")
+        print(f"User prompt length: {len(user_content)}")
+        print(f"User prompt preview (first 300 chars):")
+        print(user_content[:300])
+        
+        # Token统计
+        try:
+            final_model = model_name or settings.OPENAI_MODEL
+            system_tokens = count_tokens(system_content, final_model)
+            user_tokens = count_tokens(user_content, final_model)
+            total_input_tokens = system_tokens + user_tokens
+            
+            print(f"Token统计:")
+            print(f"  System tokens: {system_tokens}")
+            print(f"  User tokens: {user_tokens}")
+            print(f"  Total input tokens: {total_input_tokens}")
+            print(f"  Model: {final_model}")
+        except Exception as e:
+            print(f"Token统计错误: {e}")
+        
+        print("===========================\n")
+        
+        result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name)
+        
+        print(f"LLM response: {result}")
+        print("=== END LLM DEBUG ===\n")
+        
+        return result
     except Exception as e:
-        return f"Error processing request: {str(e)}" 
+        error_msg = f"Error processing request: {str(e)}"
+        print(f"LLM Error: {error_msg}")
+        return error_msg 

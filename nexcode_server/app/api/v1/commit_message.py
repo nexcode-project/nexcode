@@ -21,6 +21,17 @@ async def generate_commit_message(
     start_time = time()
     
     try:
+        # 调试输出：显示接收到的数据
+        print(f"\n=== COMMIT MESSAGE DEBUG ===")
+        print(f"Style: {request.style}")
+        print(f"API Key: {request.api_key[:10] + '...' if request.api_key else 'None'}")
+        print(f"Model Name: {request.model_name}")
+        print(f"Diff length: {len(request.diff) if request.diff else 0}")
+        print(f"Diff preview (first 500 chars):")
+        print(request.diff[:500] if request.diff else "No diff")
+        print(f"Context: {request.context}")
+        print("===========================\n")
+        
         # 准备LLM请求数据
         llm_data = {
             "diff": request.diff,
@@ -36,6 +47,9 @@ async def generate_commit_message(
             api_base_url=request.api_base_url,
             model_name=request.model_name
         )
+        
+        print(f"Generated message: {message}")
+        print("=== END DEBUG ===\n")
         
         generation_time = int((time() - start_time) * 1000)  # 转换为毫秒
         

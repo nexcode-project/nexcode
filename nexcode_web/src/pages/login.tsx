@@ -65,7 +65,7 @@ export default function Login() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
-            <img src="/logo.png" alt="NexCode" className="h-20 w-auto" />
+            <img src="/logo.png" alt="NexCode" className="h-20 w-auto rounded-xl shadow-md" />
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             登录
@@ -216,5 +216,6 @@ export default function Login() {
         </div>
       </div>
     </div>
+    </>
   );
 }

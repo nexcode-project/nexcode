@@ -19,4 +19,5 @@ passlib[bcrypt]==1.7.4
 python-cas==1.6.0
 
 # Additional
-python-dotenv==1.0.0 
+python-dotenv==1.0.0
+tiktoken==0.5.2 

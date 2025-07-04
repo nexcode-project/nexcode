@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/router';
 import { useAuthStore } from '@/store/authStore';
 import { LogOut, MessageSquare, User, Settings } from 'lucide-react';
 
@@ -7,6 +8,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const router = useRouter();
   const { user, logout, isAuthenticated } = useAuthStore();
 
   if (!isAuthenticated) {
@@ -21,7 +23,12 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <img src="/logo.png" alt="NexCode" className="h-10 w-auto" />
+                <img 
+                  src="/logo.png" 
+                  alt="NexCode" 
+                  className="h-10 w-auto rounded-lg hover:scale-105 transition-transform duration-200 cursor-pointer" 
+                  onClick={() => router.push('/chat')}
+                />
               </div>
               <div className="hidden md:block ml-10">
                 <div className="flex space-x-8">

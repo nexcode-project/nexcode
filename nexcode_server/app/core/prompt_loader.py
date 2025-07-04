@@ -34,11 +34,14 @@ def render_prompt(template: str, context: Dict[str, Any]) -> str:
     Returns:
         str: 渲染后的字符串
     """
-    # 简单的模板变量替换，可以后续扩展为 Jinja2
+    import re
+    
+    # 简单的模板变量替换，支持有空格和无空格的格式
     rendered = template
     for key, value in context.items():
-        placeholder = f"{{{{ {key} }}}}"
-        rendered = rendered.replace(placeholder, str(value))
+        # 支持 {{ key }} 和 {{key}} 两种格式
+        pattern1 = f"{{{{\\s*{key}\\s*}}}}"
+        rendered = re.sub(pattern1, str(value), rendered)
     return rendered
 
 def get_rendered_prompts(task_type: str, context: Dict[str, Any]) -> tuple[str, str]:

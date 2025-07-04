@@ -204,8 +204,11 @@ def clean_commit_message(message):
     if len(first_line) > 72:
         first_line = first_line[:69] + "..."
     
+    # 检查是否已有conventional commits格式
+    has_conventional_format = any(first_line.startswith(prefix) for prefix in ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:'])
+    
     # 如果没有conventional commits格式，尝试添加
-    if not any(first_line.startswith(prefix) for prefix in ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:']):
+    if not has_conventional_format:
         # 简单判断类型
         if 'fix' in first_line.lower() or 'bug' in first_line.lower():
             first_line = f"fix: {first_line}"

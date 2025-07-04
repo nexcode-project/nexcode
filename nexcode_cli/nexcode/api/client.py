@@ -103,8 +103,25 @@ class NexCodeAPIClient:
     
     def generate_commit_message(self, diff: str, style: str = 'conventional', context: Dict[str, Any] = None) -> str:
         """生成提交消息"""
+        # 清理diff内容，避免Unicode问题
+        try:
+            # 确保diff是有效的UTF-8字符串
+            cleaned_diff = diff.encode('utf-8', errors='replace').decode('utf-8')
+            # 移除或替换可能导致JSON问题的特殊字符
+            import re
+            # 移除控制字符
+            cleaned_diff = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', cleaned_diff)
+            # 移除可能导致JSON解析问题的反斜杠序列
+            cleaned_diff = re.sub(r'\\x[0-9a-fA-F]{2}', '', cleaned_diff)
+            cleaned_diff = re.sub(r'\\u[0-9a-fA-F]{4}', '', cleaned_diff)
+            # 转义反斜杠
+            cleaned_diff = cleaned_diff.replace('\\', '\\\\')
+        except Exception as e:
+            print(f"Warning: Could not clean diff: {e}")
+            cleaned_diff = diff
+        
         data = {
-            'diff': diff,
+            'diff': cleaned_diff,
             'style': style,
             'context': context or {}
         }
