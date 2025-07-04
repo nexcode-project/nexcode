@@ -111,7 +111,7 @@ def commit(message, style, auto):
             return
         
         # 获取git diff
-        diff = get_git_diff()
+        diff = get_git_diff(staged=True)
         if not diff:
             click.echo("❌ 没有发现代码变更")
             return
@@ -123,17 +123,15 @@ def commit(message, style, auto):
             # 生成提交消息
             click.echo("🤖 正在生成智能提交消息...")
             
-            result = api_client.generate_commit_message(
+            suggested_message = api_client.generate_commit_message(
                 diff=diff,
                 style=style,
                 context={}
             )
             
-            if 'error' in result:
-                click.echo(f"❌ 生成提交消息失败: {result['error']}")
+            if suggested_message.startswith("Error"):
+                click.echo(f"❌ 生成提交消息失败: {suggested_message}")
                 return
-            
-            suggested_message = result.get('message', 'Auto-generated commit message')
             
             # 清理提交消息，确保简洁
             suggested_message = clean_commit_message(suggested_message)

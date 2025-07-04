@@ -73,6 +73,10 @@ class NexCodeAPIClient:
         }
         return self._make_request('POST', ENDPOINTS['code_quality'], data)
     
+    def code_quality_check(self, diff: str) -> Dict[str, Any]:
+        """代码质量检查 - 兼容旧接口"""
+        return self.check_code_quality(diff)
+    
     def ask_question(self, question: str, category: str = 'general', context: Dict[str, Any] = None) -> Dict[str, Any]:
         """智能问答"""
         data = {
@@ -90,14 +94,32 @@ class NexCodeAPIClient:
         }
         return self._make_request('POST', ENDPOINTS['git_error'], data)
     
-    def generate_commit_message(self, diff: str, style: str = 'conventional', context: Dict[str, Any] = None) -> Dict[str, Any]:
+    def git_error_analysis(self, command: List[str], error_message: str) -> str:
+        """Git错误分析 - 兼容旧接口，直接返回分析结果"""
+        result = self.analyze_git_error(command, error_message)
+        if 'error' in result:
+            return f"Error analyzing git error: {result['error']}"
+        return result.get('analysis', 'Unable to analyze git error')
+    
+    def generate_commit_message(self, diff: str, style: str = 'conventional', context: Dict[str, Any] = None) -> str:
         """生成提交消息"""
         data = {
             'diff': diff,
             'style': style,
             'context': context or {}
         }
-        return self._make_request('POST', ENDPOINTS['commit_message'], data)
+        result = self._make_request('POST', ENDPOINTS['commit_message'], data)
+        
+        # 处理错误响应
+        if 'error' in result:
+            return f"Error generating commit message: {result['error']}"
+        
+        # 提取消息内容
+        message = result.get('message', 'feat: update code')
+        if not message:
+            return 'feat: update code'
+        
+        return message
     
     def analyze_push_strategy(self, diff: str, target_branch: str, current_branch: str, repository_type: str = 'github') -> Dict[str, Any]:
         """推送策略分析"""

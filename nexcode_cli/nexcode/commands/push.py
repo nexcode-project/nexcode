@@ -239,8 +239,8 @@ def push(branch, message, auto_commit, dry_run):
         # 确定目标分支
         target_branch = branch or "main"
         
-        # 获取git diff
-        diff = get_git_diff()
+        # 获取git diff (包括暂存和非暂存的更改)
+        diff = get_git_diff(staged=False)  # 获取所有更改，不只是暂存的
         if not diff:
             click.echo("❌ 没有发现代码变更")
             return
