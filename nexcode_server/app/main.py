@@ -11,6 +11,7 @@ from app.api.v1 import router as v1_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.commits import router as commits_router
+from app.api.v1.admin import router as admin_router
 from app.core.config import settings
 from app.core.database import init_db
 from app.models.schemas import HealthCheckResponse
@@ -47,6 +48,7 @@ app.include_router(v1_router, prefix="/v1")
 app.include_router(auth_router, prefix="/v1")
 app.include_router(users_router, prefix="/v1")
 app.include_router(commits_router, prefix="/v1")
+app.include_router(admin_router, prefix="/v1")
 
 @app.get("/")
 async def root():

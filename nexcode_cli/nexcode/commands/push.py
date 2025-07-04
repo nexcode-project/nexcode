@@ -100,16 +100,11 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
             click.echo("Error: Failed to stage changes.")
             return
         
-        # Check if there are any changes to commit after adding
-        if not dry_run:
-            diff = get_git_diff(staged=True)
-            if not diff:
-                click.echo("No changes to commit. Working directory is clean.")
-                return
-        else:
-            # In dry run, simulate having changes
-            click.echo("[DRY RUN] Simulating changes for demonstration...")
-            diff = "simulated diff for dry run"
+        # 获取git diff (检查暂存区的更改)
+        diff = get_git_diff(staged=True)  # 检查暂存区的更改，因为已经执行了git add .
+        if not diff:
+            click.echo("❌ 没有发现代码变更")
+            return
 
         # Determine if bug check should be run
         should_check_bugs = check_bugs or (
@@ -239,8 +234,8 @@ def push(branch, message, auto_commit, dry_run):
         # 确定目标分支
         target_branch = branch or "main"
         
-        # 获取git diff (包括暂存和非暂存的更改)
-        diff = get_git_diff(staged=False)  # 获取所有更改，不只是暂存的
+        # 获取git diff (检查暂存区的更改)
+        diff = get_git_diff(staged=True)  # 检查暂存区的更改，因为已经执行了git add .
         if not diff:
             click.echo("❌ 没有发现代码变更")
             return

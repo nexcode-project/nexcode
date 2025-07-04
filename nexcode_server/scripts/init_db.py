@@ -26,18 +26,15 @@ async def create_admin_user():
         existing_admin = result.scalar_one_or_none()
         
         if existing_admin:
-            # 为现有管理员用户添加密码
-            if not existing_admin.password_hash:
-                existing_admin.password_hash = auth_service.get_password_hash("admin123")
-                await db.commit()
-                print("为管理员用户添加密码成功")
-                print("管理员登录信息: username=admin, password=admin123")
-            else:
-                print("管理员用户已存在")
+            # 为现有管理员用户添加/更新密码
+            existing_admin.password_hash = auth_service.get_password_hash("admin")
+            await db.commit()
+            print("为管理员用户设置密码成功")
+            print("管理员登录信息: username=admin, password=admin")
             return existing_admin
         
         # 创建管理员用户
-        password_hash = auth_service.get_password_hash("admin123")
+        password_hash = auth_service.get_password_hash("admin")
         admin_user = User(
             username="admin",
             email="admin@nexcode.local",

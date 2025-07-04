@@ -20,4 +20,5 @@ python-cas==1.6.0
 
 # Additional
 python-dotenv==1.0.0
-tiktoken==0.5.2 
+tiktoken==0.5.2
+psutil==5.9.6 

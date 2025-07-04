@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any
 import hashlib
 import secrets
 import os
+import xml.etree.ElementTree as ET
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -61,6 +62,53 @@ class AuthService:
         """获取CAS登录URL"""
         return self.cas_client.get_login_url()
     
+    def parse_cas_xml_response(self, xml_content: str) -> Optional[Dict[str, Any]]:
+        """
+        解析CAS XML响应，提取用户信息
+        """
+        try:
+            # 移除XML中的命名空间前缀，简化解析
+            xml_content = xml_content.replace('cas:', '')
+            root = ET.fromstring(xml_content)
+            
+            # 查找authenticationSuccess元素
+            auth_success = root.find('.//authenticationSuccess')
+            if auth_success is None:
+                return None
+            
+            # 提取用户名
+            user_element = auth_success.find('user')
+            username = user_element.text if user_element is not None else None
+            
+            if not username:
+                return None
+            
+            # 提取属性
+            attributes = {}
+            attrs_element = auth_success.find('attributes')
+            if attrs_element is not None:
+                for attr in attrs_element:
+                    # 移除命名空间前缀
+                    tag_name = attr.tag.split('}')[-1] if '}' in attr.tag else attr.tag
+                    attributes[tag_name] = attr.text
+            
+            # 构建用户信息
+            user_info = {
+                "username": username,
+                "email": attributes.get("mail", attributes.get("email", f"{username}@example.com")),
+                "full_name": attributes.get("displayName", attributes.get("cn", username)),
+                "attributes": attributes
+            }
+            
+            return user_info
+            
+        except ET.ParseError as e:
+            print(f"XML解析错误: {e}")
+            return None
+        except Exception as e:
+            print(f"CAS响应解析错误: {e}")
+            return None
+    
     async def verify_cas_ticket(self, ticket: str, service: str) -> Optional[Dict[str, Any]]:
         """验证CAS ticket"""
         try:
@@ -71,22 +119,63 @@ class AuthService:
                 "service": service
             }
             
-            async with httpx.AsyncClient() as client:
+            print(f"验证CAS ticket: {validate_url}")
+            print(f"参数: {params}")
+            
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(validate_url, params=params)
                 response.raise_for_status()
                 
-                # 解析CAS响应（简化版，实际需要解析XML）
-                if "cas:authenticationSuccess" in response.text:
-                    # 提取用户信息（这里需要根据实际CAS响应格式解析）
-                    return {
-                        "username": "cas_user",  # 从响应中提取
-                        "email": "cas_user@example.com",  # 从响应中提取
-                        "attributes": {}  # 从响应中提取其他属性
-                    }
-                return None
+                print(f"CAS响应状态: {response.status_code}")
+                print(f"CAS响应内容: {response.text[:500]}...")
+                
+                # 解析XML响应
+                user_info = self.parse_cas_xml_response(response.text)
+                if user_info:
+                    print(f"解析出的用户信息: {user_info}")
+                    return user_info
+                else:
+                    print("CAS响应中未找到用户信息")
+                    return None
+                    
+        except httpx.TimeoutException:
+            print("CAS验证超时")
+            return None
+        except httpx.HTTPStatusError as e:
+            print(f"CAS验证HTTP错误: {e.response.status_code} - {e.response.text}")
+            return None
         except Exception as e:
             print(f"CAS验证失败: {e}")
             return None
+    
+    async def test_cas_connection(self) -> Dict[str, Any]:
+        """
+        测试CAS连接
+        """
+        try:
+            # 测试CAS服务器是否可达
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(CAS_SERVER_URL)
+                
+                return {
+                    "success": True,
+                    "message": "CAS服务器连接成功",
+                    "server_url": CAS_SERVER_URL,
+                    "status_code": response.status_code,
+                    "response_time": "< 10s"
+                }
+        except httpx.TimeoutException:
+            return {
+                "success": False,
+                "message": "CAS服务器连接超时",
+                "server_url": CAS_SERVER_URL
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"CAS服务器连接失败: {str(e)}",
+                "server_url": CAS_SERVER_URL
+            }
     
     async def create_or_get_user_from_cas(self, db: AsyncSession, cas_info: Dict[str, Any]) -> User:
         """从CAS信息创建或获取用户"""
