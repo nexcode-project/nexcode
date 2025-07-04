@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+import re
 
 # 用户相关模型
 class UserBase(BaseModel):
@@ -8,8 +9,12 @@ class UserBase(BaseModel):
     email: EmailStr
     full_name: Optional[str] = None
 
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
 class UserCreate(UserBase):
-    pass
+    password: str = Field(..., min_length=6)
 
 class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=50)
@@ -17,12 +22,24 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
     id: int
+    username: str = Field(..., min_length=3, max_length=50)
+    email: str  # Changed from EmailStr to str to allow .local domains
+    full_name: Optional[str] = None
     is_active: bool
     is_superuser: bool
     created_at: datetime
     last_login: Optional[datetime] = None
+    
+    @field_validator('email')
+    @classmethod
+    def validate_email(cls, v):
+        # Basic email pattern that allows .local and other development domains
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$|^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.local$'
+        if not re.match(email_pattern, v):
+            raise ValueError('Invalid email format')
+        return v
     
     class Config:
         from_attributes = True

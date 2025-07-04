@@ -26,14 +26,23 @@ async def create_admin_user():
         existing_admin = result.scalar_one_or_none()
         
         if existing_admin:
-            print("管理员用户已存在")
+            # 为现有管理员用户添加密码
+            if not existing_admin.password_hash:
+                existing_admin.password_hash = auth_service.get_password_hash("admin123")
+                await db.commit()
+                print("为管理员用户添加密码成功")
+                print("管理员登录信息: username=admin, password=admin123")
+            else:
+                print("管理员用户已存在")
             return existing_admin
         
         # 创建管理员用户
+        password_hash = auth_service.get_password_hash("admin123")
         admin_user = User(
             username="admin",
             email="admin@nexcode.local",
             full_name="System Administrator",
+            password_hash=password_hash,
             is_superuser=True,
             is_active=True
         )
@@ -43,6 +52,7 @@ async def create_admin_user():
         await db.refresh(admin_user)
         
         print(f"管理员用户创建成功: {admin_user.username} (ID: {admin_user.id})")
+        print("管理员登录信息: username=admin, password=admin123")
         return admin_user
 
 async def create_demo_user():
@@ -54,14 +64,23 @@ async def create_demo_user():
         existing_demo = result.scalar_one_or_none()
         
         if existing_demo:
-            print("演示用户已存在")
+            # 为现有演示用户添加密码
+            if not existing_demo.password_hash:
+                existing_demo.password_hash = auth_service.get_password_hash("demo123")
+                await db.commit()
+                print("为演示用户添加密码成功")
+                print("演示用户登录信息: username=demo, password=demo123")
+            else:
+                print("演示用户已存在")
             return existing_demo
         
         # 创建演示用户
+        password_hash = auth_service.get_password_hash("demo123")
         demo_user = User(
             username="demo",
             email="demo@nexcode.local",
             full_name="Demo User",
+            password_hash=password_hash,
             is_superuser=False,
             is_active=True
         )
@@ -71,6 +90,7 @@ async def create_demo_user():
         await db.refresh(demo_user)
         
         print(f"演示用户创建成功: {demo_user.username} (ID: {demo_user.id})")
+        print("演示用户登录信息: username=demo, password=demo123")
         return demo_user
 
 async def create_demo_api_key(user: User):

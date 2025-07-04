@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  nexcode_web:
+    build:
+      context: ..
+      dockerfile: docker/nexcode_web/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    volumes:
+      - ../nexcode_web:/app
+    depends_on:
+      - nexcode_server
+
   nexcode_server:
     build:
       context: ..

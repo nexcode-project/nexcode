@@ -5,9 +5,94 @@ from datetime import timedelta
 
 from app.core.dependencies import DatabaseSession, OptionalUser
 from app.services.auth_service import auth_service
-from app.models.user_schemas import Token, UserCASLogin, UserResponse
+from app.models.user_schemas import Token, UserCASLogin, UserResponse, UserLogin, UserCreate
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+
+@router.post("/login")
+async def login_with_password(
+    request: Request,
+    response: Response,
+    user_login: UserLogin,
+    db: DatabaseSession
+):
+    """本地用户名密码登录"""
+    # 验证用户凭据
+    user = await auth_service.authenticate_user(db, user_login.username, user_login.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户名或密码错误",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户账户已被禁用"
+        )
+    
+    # 创建用户会话
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    
+    session = await auth_service.create_user_session(
+        db=db,
+        user_id=user.id,
+        ip_address=client_ip,
+        user_agent=user_agent
+    )
+    
+    # 创建JWT token
+    access_token = auth_service.create_access_token(
+        data={"sub": str(user.id), "username": user.username}
+    )
+    
+    # 设置Cookie
+    response.set_cookie(
+        key="session_token",
+        value=session.session_token,
+        max_age=86400,  # 24小时
+        httponly=True,
+        secure=False,  # 开发环境设为False，生产环境设为True
+        samesite="lax"
+    )
+    
+    # 返回包含用户信息的响应
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": 1800,  # 30分钟
+        "user": UserResponse.model_validate(user),
+        "session_token": session.session_token
+    }
+
+@router.post("/register", response_model=UserResponse)
+async def register_user(
+    user_create: UserCreate,
+    db: DatabaseSession
+):
+    """用户注册"""
+    # 检查用户名是否已存在
+    existing_user = await auth_service.get_user_by_username(db, user_create.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="用户名已存在"
+        )
+    
+    # 检查邮箱是否已存在
+    if user_create.email:
+        existing_email = await auth_service.get_user_by_email(db, user_create.email)
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="邮箱已被使用"
+            )
+    
+    # 创建新用户
+    user = await auth_service.create_user(db, user_create)
+    return UserResponse.model_validate(user)
 
 @router.get("/cas/login")
 async def cas_login():
@@ -214,7 +299,7 @@ async def refresh_token(
 
 @router.get("/status")
 async def auth_status(current_user: OptionalUser):
-    """检查认证状态"""
+    """获取认证状态"""
     if current_user:
         return {
             "authenticated": True,

@@ -12,6 +12,9 @@ class User(Base):
     email = Column(String(100), unique=True, index=True, nullable=False)
     full_name = Column(String(100), nullable=True)
     
+    # 密码认证字段
+    password_hash = Column(String(255), nullable=True)  # 密码哈希
+    
     # CAS相关字段
     cas_user_id = Column(String(100), unique=True, index=True, nullable=True)
     cas_attributes = Column(JSON, nullable=True)  # 存储CAS返回的用户属性

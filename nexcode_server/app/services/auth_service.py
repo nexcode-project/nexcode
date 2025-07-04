@@ -149,6 +149,49 @@ class AuthService:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
     
+    async def get_user_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
+        """根据邮箱获取用户"""
+        stmt = select(User).where(User.email == email, User.is_active == True)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """验证密码"""
+        return pwd_context.verify(plain_password, hashed_password)
+    
+    def get_password_hash(self, password: str) -> str:
+        """生成密码哈希"""
+        return pwd_context.hash(password)
+    
+    async def authenticate_user(self, db: AsyncSession, username: str, password: str) -> Optional[User]:
+        """验证用户名和密码"""
+        user = await self.get_user_by_username(db, username)
+        if not user:
+            return None
+        if not user.password_hash:
+            return None
+        if not self.verify_password(password, user.password_hash):
+            return None
+        return user
+    
+    async def create_user(self, db: AsyncSession, user_create: UserCreate) -> User:
+        """创建新用户"""
+        password_hash = self.get_password_hash(user_create.password)
+        
+        user = User(
+            username=user_create.username,
+            email=user_create.email,
+            full_name=user_create.full_name,
+            password_hash=password_hash,
+            is_active=True,
+            is_superuser=False
+        )
+        
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user
+    
     async def verify_session_token(self, db: AsyncSession, session_token: str) -> Optional[User]:
         """验证会话token"""
         stmt = select(UserSession).where(

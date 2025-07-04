@@ -1,6 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+import os
+
+# 加载环境变量
+load_dotenv()
+
 from app.api.v1 import router as v1_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router

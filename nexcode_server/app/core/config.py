@@ -2,7 +2,8 @@ import os
 from typing import Optional
 
 class Settings:
-    # OpenAI 配置（API密钥由客户端提供）
+    # OpenAI 配置
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")  # 服务器的 OpenAI API Key
     OPENAI_API_BASE: Optional[str] = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
     OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
     
