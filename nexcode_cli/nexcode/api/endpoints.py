@@ -37,7 +37,10 @@ ENDPOINTS = {
     
     # 文档
     'docs': "/docs",
-    'redoc': "/redoc"
+    'redoc': "/redoc",
+
+    # Commit 信息
+    'commits': f"{API_VERSION}/commits",
 }
 
 # 向后兼容的APIEndpoints类

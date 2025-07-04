@@ -172,6 +172,16 @@ class NexCodeAPIClient:
         }
         return self._make_request('POST', ENDPOINTS['repository_analysis'], data)
 
+    def create_commit_info(self, commit_data: Dict[str, Any]) -> Dict[str, Any]:
+        """创建新的Commit信息记录"""
+        return self._make_request('POST', ENDPOINTS['commits'], commit_data)
+
+    def mark_commit_as_committed(self, commit_id: int, commit_hash: str) -> Dict[str, Any]:
+        """标记Commit为已提交状态"""
+        endpoint = f"{ENDPOINTS['commits']}/{commit_id}/commit"
+        data = { 'commit_hash': commit_hash }
+        return self._make_request('POST', endpoint, data)
+
 
 # 全局API客户端实例
 api_client = NexCodeAPIClient() 

@@ -2,7 +2,7 @@ import os
 import click
 import subprocess
 from ..config import config as app_config
-from ..utils.git import get_git_diff, ensure_git_root
+from ..utils.git import get_git_diff, ensure_git_root, get_current_branch
 from ..api.client import api_client
 
 
@@ -80,6 +80,44 @@ def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs):
                 result = run_git_command_with_ai(['git', 'commit', '-m', commit_message])
                 if result:
                     click.echo("✓ Successfully committed.")
+
+                    # 获取最新commit hash
+                    try:
+                        hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
+                        commit_hash = hash_result.stdout.strip()
+                    except subprocess.CalledProcessError:
+                        commit_hash = None
+
+                    # 获取当前分支和远程仓库信息
+                    branch_name = get_current_branch() or ''
+                    try:
+                        remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], capture_output=True, text=True, check=True)
+                        repository_url = remote_url_result.stdout.strip()
+                        # 提取仓库名
+                        import re, os
+                        repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
+                        repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
+                    except subprocess.CalledProcessError:
+                        repository_url = None
+                        repository_name = None
+
+                    # 调用后端API保存commit信息
+                    commit_payload = {
+                        'repository_url': repository_url,
+                        'repository_name': repository_name,
+                        'branch_name': branch_name,
+                        'commit_hash': commit_hash,
+                        'ai_generated_message': commit_message,
+                        'final_commit_message': commit_message,
+                        'diff_content': diff,
+                        'commit_style': used_style,
+                        'status': 'committed'
+                    }
+                    save_result = api_client.create_commit_info(commit_payload)
+                    if 'error' in save_result:
+                        click.echo(f"⚠️  无法保存Commit信息: {save_result['error']}")
+                    else:
+                        click.echo("📦 Commit信息已保存到服务器")
             else:
                 click.echo("Commit aborted by user.")
         else:
