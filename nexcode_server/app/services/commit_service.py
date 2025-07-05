@@ -15,15 +15,60 @@ class CommitService:
     async def create_commit_info(self, db: AsyncSession, user_id: int, 
                                commit_data: CommitInfoCreate) -> CommitInfo:
         """创建commit信息记录"""
+        # 解析diff内容
+        parsed_data = self._parse_diff_content(commit_data.diff_content)
+        
+        # 合并解析的数据
+        commit_dict = commit_data.model_dump()
+        commit_dict.update(parsed_data)
+        
         commit_info = CommitInfo(
             user_id=user_id,
-            **commit_data.model_dump()
+            **commit_dict
         )
         
         db.add(commit_info)
         await db.commit()
         await db.refresh(commit_info)
         return commit_info
+    
+    def _parse_diff_content(self, diff_content: Optional[str]) -> Dict[str, Any]:
+        """解析diff内容，提取文件变更、行数统计等信息"""
+        if not diff_content:
+            return {
+                'files_changed': [],
+                'lines_added': 0,
+                'lines_deleted': 0
+            }
+        
+        files_changed = []
+        lines_added = 0
+        lines_deleted = 0
+        
+        # 按行分割diff内容
+        lines = diff_content.split('\n')
+        
+        for line in lines:
+            # 解析文件变更
+            if line.startswith('diff --git'):
+                # 提取文件路径
+                parts = line.split(' ')
+                if len(parts) >= 4:
+                    file_path = parts[3]  # b/filename
+                    if file_path not in files_changed:
+                        files_changed.append(file_path)
+            
+            # 统计增删行数
+            elif line.startswith('+') and not line.startswith('+++'):
+                lines_added += 1
+            elif line.startswith('-') and not line.startswith('---'):
+                lines_deleted += 1
+        
+        return {
+            'files_changed': files_changed,
+            'lines_added': lines_added,
+            'lines_deleted': lines_deleted
+        }
     
     async def get_commit_info(self, db: AsyncSession, commit_id: int, 
                             user_id: Optional[int] = None) -> Optional[CommitInfo]:
