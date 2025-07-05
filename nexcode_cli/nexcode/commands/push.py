@@ -337,6 +337,43 @@ def push(branch, message, auto_commit, dry_run):
             try:
                 subprocess.run(['git', 'commit', '-m', final_message], check=True)
                 click.echo(f"✅ 代码已提交: {final_message}")
+                
+                # 保存Commit信息到服务器
+                try:
+                    # 获取最新commit hash
+                    hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
+                    commit_hash = hash_result.stdout.strip()
+                except subprocess.CalledProcessError:
+                    commit_hash = None
+
+                # 获取仓库信息
+                try:
+                    remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], capture_output=True, text=True, check=True)
+                    repository_url = remote_url_result.stdout.strip()
+                    import re, os
+                    repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
+                    repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
+                except subprocess.CalledProcessError:
+                    repository_url = None
+                    repository_name = None
+
+                commit_payload = {
+                    'repository_url': repository_url,
+                    'repository_name': repository_name,
+                    'branch_name': current_branch,
+                    'commit_hash': commit_hash,
+                    'ai_generated_message': final_message,
+                    'final_commit_message': final_message,
+                    'diff_content': diff,
+                    'commit_style': 'conventional',
+                    'status': 'committed'
+                }
+                save_result = api_client.create_commit_info(commit_payload)
+                if 'error' in save_result:
+                    click.echo(f"⚠️  无法保存Commit信息: {save_result['error']}")
+                else:
+                    click.echo("📦 Commit信息已保存到服务器")
+                    
             except subprocess.CalledProcessError as e:
                 click.echo(f"❌ 提交失败: {e}")
                 return
