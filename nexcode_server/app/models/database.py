@@ -123,4 +123,32 @@ class APIKey(Base):
     
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    expires_at = Column(DateTime(timezone=True), nullable=True)  # 可选的过期时间 
+    expires_at = Column(DateTime(timezone=True), nullable=True)  # 可选的过期时间
+
+class SystemSettings(Base):
+    """系统设置表"""
+    __tablename__ = "system_settings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # 基本系统设置
+    site_name = Column(String(100), default="NexCode")
+    site_description = Column(Text, nullable=True)
+    admin_email = Column(String(100), nullable=True)
+    max_file_size = Column(Integer, default=10485760)  # 10MB
+    session_timeout = Column(Integer, default=1800)  # 30分钟
+    
+    # 用户注册和验证
+    enable_registration = Column(Boolean, default=True)
+    enable_email_verification = Column(Boolean, default=False)
+    
+    # SMTP邮件设置
+    smtp_host = Column(String(100), nullable=True)
+    smtp_port = Column(Integer, default=587)
+    smtp_username = Column(String(100), nullable=True)
+    smtp_password = Column(String(255), nullable=True)
+    smtp_use_tls = Column(Boolean, default=True)
+    
+    # 时间戳
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now()) 

@@ -162,7 +162,47 @@ class UserCommitStats(BaseModel):
     most_used_style: str
     total_lines_added: int
     total_lines_deleted: int
+
+# 系统设置模型
+class SystemSettingsBase(BaseModel):
+    site_name: str = Field(..., min_length=1, max_length=100)
+    site_description: Optional[str] = None
+    admin_email: Optional[EmailStr] = None
+    max_file_size: int = Field(10485760, ge=1024, le=104857600)  # 1KB to 100MB
+    session_timeout: int = Field(1800, ge=300, le=86400)  # 5min to 24h
+    enable_registration: bool = True
+    enable_email_verification: bool = False
+    smtp_host: Optional[str] = None
+    smtp_port: int = Field(587, ge=1, le=65535)
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: bool = True
+
+class SystemSettingsCreate(SystemSettingsBase):
+    pass
+
+class SystemSettingsUpdate(BaseModel):
+    site_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    site_description: Optional[str] = None
+    admin_email: Optional[EmailStr] = None
+    max_file_size: Optional[int] = Field(None, ge=1024, le=104857600)
+    session_timeout: Optional[int] = Field(None, ge=300, le=86400)
+    enable_registration: Optional[bool] = None
+    enable_email_verification: Optional[bool] = None
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = Field(None, ge=1, le=65535)
+    smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_use_tls: Optional[bool] = None
+
+class SystemSettingsResponse(SystemSettingsBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
     
+    class Config:
+        from_attributes = True
+
 class CommitTrends(BaseModel):
     date: str
     commit_count: int

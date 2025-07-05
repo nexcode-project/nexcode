@@ -133,6 +133,24 @@ export interface SystemStats {
   api_calls_today: number;
 }
 
+export interface SystemSettings {
+  id?: number;
+  site_name: string;
+  site_description?: string;
+  admin_email?: string;
+  max_file_size: number;
+  session_timeout: number;
+  enable_registration: boolean;
+  enable_email_verification: boolean;
+  smtp_host?: string;
+  smtp_port: number;
+  smtp_username?: string;
+  smtp_password?: string;
+  smtp_use_tls: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Auth API
 export const authAPI = {
   // 密码登录
@@ -342,6 +360,18 @@ export const systemAPI = {
   // 获取系统健康状态
   getHealthCheck: async (): Promise<{ status: string; version: string; services: Record<string, string> }> => {
     const response = await apiClient.get('/health');
+    return response.data;
+  },
+
+  // 获取系统设置
+  getSystemSettings: async (): Promise<SystemSettings> => {
+    const response = await apiClient.get('/v1/admin/system/settings');
+    return response.data;
+  },
+
+  // 更新系统设置
+  updateSystemSettings: async (settings: Partial<SystemSettings>): Promise<SystemSettings> => {
+    const response = await apiClient.put('/v1/admin/system/settings', settings);
     return response.data;
   },
 

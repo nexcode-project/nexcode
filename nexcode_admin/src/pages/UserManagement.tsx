@@ -23,7 +23,7 @@ import {
   KeyOutlined,
 } from '@ant-design/icons';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface User {
   id: number;
@@ -52,7 +52,7 @@ const UserManagement: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
-  const [selectedUserKeys, setSelectedUserKeys] = useState<APIKey[]>([]);
+  const [selectedUserKeys] = useState<APIKey[]>([]);
   const [form] = Form.useForm();
 
   // 模拟数据加载
@@ -154,29 +154,9 @@ const UserManagement: React.FC = () => {
   };
 
   const handleViewAPIKeys = (user: User) => {
-    // 模拟API密钥数据
-    const mockAPIKeys: APIKey[] = [
-      {
-        id: 1,
-        key_name: 'Development Key',
-        key_prefix: 'nex_dev_****',
-        is_active: true,
-        usage_count: 1250,
-        created_at: '2024-01-15T10:30:00Z',
-        last_used: '2024-01-20T15:22:00Z',
-      },
-      {
-        id: 2,
-        key_name: 'Production Key',
-        key_prefix: 'nex_prod_****',
-        is_active: false,
-        usage_count: 89,
-        created_at: '2024-01-16T09:15:00Z',
-        last_used: '2024-01-18T11:30:00Z',
-      },
-    ];
-    setSelectedUserKeys(mockAPIKeys);
-    setApiKeysVisible(true);
+    // 查看API密钥逻辑
+    console.log('Viewing API keys for user:', user.username);
+    message.info('API密钥管理功能开发中');
   };
 
   const columns = [

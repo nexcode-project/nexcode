@@ -8,9 +8,7 @@ import {
   Table,
   Tag,
   Space,
-  Button,
   Progress,
-  List,
   Avatar,
   Spin,
   Alert,
@@ -18,13 +16,9 @@ import {
 import {
   UserOutlined,
   CodeOutlined,
-  ApiOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined,
   ClockCircleOutlined,
   StarOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
 } from '@ant-design/icons';
 import {
   LineChart,
@@ -34,7 +28,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
   Bar,
   PieChart,
   Pie,
@@ -82,7 +75,7 @@ interface CommitRecord {
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [, setRecentActivities] = useState<RecentActivity[]>([]);
   const [recentCommits, setRecentCommits] = useState<CommitRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

@@ -5,7 +5,8 @@ from sqlalchemy import select, func, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import CurrentSuperUser, DatabaseSession
-from app.models.database import User, CommitInfo, UserSession, APIKey
+from app.models.database import User, CommitInfo, UserSession, APIKey, SystemSettings
+from app.models.user_schemas import SystemSettingsResponse, SystemSettingsUpdate
 from app.services.auth_service import auth_service
 from app.core.config import settings
 import os
@@ -164,10 +165,31 @@ async def update_cas_config(
 @router.post("/cas/test")
 async def test_cas_connection(admin_user: CurrentSuperUser):
     """测试CAS连接"""
-    from app.services.auth_service import auth_service
-    
-    result = await auth_service.test_cas_connection()
-    return result
+    try:
+        cas_server_url = os.getenv("CAS_SERVER_URL")
+        if not cas_server_url:
+            return {
+                "success": False,
+                "message": "CAS服务器地址未配置"
+            }
+        
+        # 简单的连接测试
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.get(cas_server_url, timeout=10.0)
+            return {
+                "success": True,
+                "message": "CAS服务器连接正常",
+                "server_url": cas_server_url,
+                "status_code": response.status_code,
+                "response_time": f"{response.elapsed.total_seconds():.2f}s"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"CAS连接测试失败: {str(e)}",
+            "error": str(e)
+        }
 
 @router.get("/monitoring/api")
 async def get_api_monitoring(
@@ -479,4 +501,60 @@ async def get_commits_analytics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"获取提交分析失败: {str(e)}"
+        )
+
+@router.get("/system/settings", response_model=SystemSettingsResponse)
+async def get_system_settings(
+    admin_user: CurrentSuperUser,
+    db: DatabaseSession
+):
+    """获取系统设置"""
+    try:
+        stmt = select(SystemSettings).limit(1)
+        result = await db.execute(stmt)
+        settings = result.scalar_one_or_none()
+        
+        if not settings:
+            # 如果没有设置记录，创建默认设置
+            settings = SystemSettings()
+            db.add(settings)
+            await db.commit()
+            await db.refresh(settings)
+        
+        return settings
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"获取系统设置失败: {str(e)}"
+        )
+
+@router.put("/system/settings", response_model=SystemSettingsResponse)
+async def update_system_settings(
+    settings_data: SystemSettingsUpdate,
+    admin_user: CurrentSuperUser,
+    db: DatabaseSession
+):
+    """更新系统设置"""
+    try:
+        stmt = select(SystemSettings).limit(1)
+        result = await db.execute(stmt)
+        settings = result.scalar_one_or_none()
+        
+        if not settings:
+            # 如果没有设置记录，创建新的
+            settings = SystemSettings()
+            db.add(settings)
+        
+        # 更新设置
+        update_data = settings_data.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(settings, field, value)
+        
+        await db.commit()
+        await db.refresh(settings)
+        return settings
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"更新系统设置失败: {str(e)}"
         ) 

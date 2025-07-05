@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Typography,
-  message,
   Space,
   Divider,
   Spin,
@@ -24,7 +23,7 @@ interface LoginFormData {
 
 const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
-  const [casEnabled, setCasEnabled] = useState(true); // 从API获取CAS配置状态
+  const [casEnabled] = useState(true); // 从API获取CAS配置状态
   const navigate = useNavigate();
   const location = useLocation();
   const { login, loginWithCAS, isAuthenticated, loading: authLoading } = useAuth();

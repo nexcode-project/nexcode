@@ -21,7 +21,7 @@ import {
 } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface APIEndpoint {
   endpoint: string;
