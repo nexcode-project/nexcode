@@ -334,6 +334,7 @@ async def get_all_commits(
                 "commit_hash": commit.commit_hash,
                 "ai_generated_message": commit.ai_generated_message,
                 "final_commit_message": commit.final_commit_message,
+                "diff_content": commit.diff_content,
                 "commit_style": commit.commit_style,
                 "lines_added": commit.lines_added,
                 "lines_deleted": commit.lines_deleted,
@@ -341,6 +342,7 @@ async def get_all_commits(
                 "ai_model_used": commit.ai_model_used,
                 "generation_time_ms": commit.generation_time_ms,
                 "user_rating": commit.user_rating,
+                "user_feedback": commit.user_feedback,
                 "status": commit.status,
                 "created_at": commit.created_at.isoformat(),
                 "committed_at": commit.committed_at.isoformat() if commit.committed_at else None

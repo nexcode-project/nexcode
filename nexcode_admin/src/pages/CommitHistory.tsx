@@ -12,6 +12,12 @@ import {
   Tooltip,
   message,
   Spin,
+  Modal,
+  Form,
+  Input as AntInput,
+  Rate,
+  Popconfirm,
+  Drawer,
 } from 'antd';
 import {
   SearchOutlined,
@@ -19,6 +25,10 @@ import {
   UserOutlined,
   CalendarOutlined,
   ReloadOutlined,
+  EyeOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { commitsAPI } from '../services/api';
 import dayjs from 'dayjs';
@@ -47,6 +57,8 @@ interface CommitRecord {
   status: string;
   created_at: string;
   committed_at?: string;
+  user_feedback?: string;
+  diff_content?: string;
 }
 
 const CommitHistory: React.FC = () => {
@@ -54,13 +66,19 @@ const CommitHistory: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [selectedRepository, setSelectedRepository] = useState<string>();
-  const [selectedUser, setSelectedUser] = useState<string>();
+  const [selectedUser, setSelectedUser] = useState<string | undefined>();
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 20,
     total: 0,
   });
+
+  // 新增状态
+  const [diffDrawerVisible, setDiffDrawerVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<CommitRecord | null>(null);
+  const [editForm] = Form.useForm();
 
   useEffect(() => {
     loadCommits();
@@ -142,6 +160,51 @@ const CommitHistory: React.FC = () => {
       case 'draft': return '草稿';
       case 'failed': return '失败';
       default: return status;
+    }
+  };
+
+  // 查看diff详情
+  const handleViewDiff = (commit: CommitRecord) => {
+    setSelectedCommit(commit);
+    setDiffDrawerVisible(true);
+  };
+
+  // 编辑commit信息
+  const handleEditCommit = (commit: CommitRecord) => {
+    setSelectedCommit(commit);
+    editForm.setFieldsValue({
+      final_commit_message: commit.final_commit_message,
+      user_rating: commit.user_rating,
+      user_feedback: commit.user_feedback,
+      status: commit.status,
+    });
+    setEditModalVisible(true);
+  };
+
+  // 保存编辑
+  const handleSaveEdit = async () => {
+    try {
+      const values = await editForm.validateFields();
+      if (!selectedCommit) return;
+
+      // 调用API更新commit信息
+      await commitsAPI.updateCommit(selectedCommit.id, values);
+      message.success('提交信息更新成功');
+      setEditModalVisible(false);
+      loadCommits(); // 重新加载数据
+    } catch (error) {
+      message.error('更新失败');
+    }
+  };
+
+  // 删除commit
+  const handleDeleteCommit = async (commitId: number) => {
+    try {
+      await commitsAPI.deleteCommit(commitId);
+      message.success('提交记录删除成功');
+      loadCommits(); // 重新加载数据
+    } catch (error) {
+      message.error('删除失败');
     }
   };
 
@@ -257,6 +320,47 @@ const CommitHistory: React.FC = () => {
         </Space>
       ),
     },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 150,
+      fixed: 'right' as const,
+      render: (_: any, record: CommitRecord) => (
+        <Space>
+          <Tooltip title="查看Diff">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewDiff(record)}
+              size="small"
+            />
+          </Tooltip>
+          <Tooltip title="编辑">
+            <Button
+              type="text"
+              icon={<EditOutlined />}
+              onClick={() => handleEditCommit(record)}
+              size="small"
+            />
+          </Tooltip>
+          <Tooltip title="删除">
+            <Popconfirm
+              title="确定要删除这条提交记录吗？"
+              onConfirm={() => handleDeleteCommit(record.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button
+                type="text"
+                icon={<DeleteOutlined />}
+                danger
+                size="small"
+              />
+            </Popconfirm>
+          </Tooltip>
+        </Space>
+      ),
+    },
   ];
 
   const filteredCommits = commits.filter(commit => {
@@ -362,6 +466,110 @@ const CommitHistory: React.FC = () => {
           />
         </Spin>
       </Card>
+
+      {/* Diff查看抽屉 */}
+      <Drawer
+        title={
+          <Space>
+            <CodeOutlined />
+            Diff 详情
+            {selectedCommit && (
+              <Tag color="blue">
+                {selectedCommit.commit_hash?.substring(0, 8)}
+              </Tag>
+            )}
+          </Space>
+        }
+        placement="right"
+        size="large"
+        onClose={() => setDiffDrawerVisible(false)}
+        open={diffDrawerVisible}
+        width="60%"
+      >
+        {selectedCommit && (
+          <div>
+            <Card title="基本信息" size="small" style={{ marginBottom: 16 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <div><strong>仓库:</strong> {selectedCommit.repository_name || '未知'}</div>
+                <div><strong>分支:</strong> {selectedCommit.branch_name || '未知'}</div>
+                <div><strong>提交哈希:</strong> <code>{selectedCommit.commit_hash || '无'}</code></div>
+                <div><strong>提交消息:</strong> {selectedCommit.final_commit_message}</div>
+                <div><strong>用户:</strong> {selectedCommit.username}</div>
+                <div><strong>状态:</strong> 
+                  <Tag color={getStatusColor(selectedCommit.status)} style={{ marginLeft: 8 }}>
+                    {getStatusText(selectedCommit.status)}
+                  </Tag>
+                </div>
+                <div><strong>创建时间:</strong> {dayjs(selectedCommit.created_at).format('YYYY-MM-DD HH:mm:ss')}</div>
+              </Space>
+            </Card>
+            
+            <Card title="Diff 内容" size="small">
+              <pre style={{ 
+                background: '#f6f8fa', 
+                padding: '16px', 
+                borderRadius: '6px',
+                overflow: 'auto',
+                maxHeight: '60vh',
+                fontSize: '13px',
+                lineHeight: '1.45',
+                fontFamily: 'SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace'
+              }}>
+                {selectedCommit.diff_content || '无diff内容'}
+              </pre>
+            </Card>
+          </div>
+        )}
+      </Drawer>
+
+      {/* 编辑Modal */}
+      <Modal
+        title="编辑提交信息"
+        open={editModalVisible}
+        onOk={handleSaveEdit}
+        onCancel={() => setEditModalVisible(false)}
+        width={600}
+        okText="保存"
+        cancelText="取消"
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+        >
+          <Form.Item
+            label="提交消息"
+            name="final_commit_message"
+            rules={[{ required: true, message: '请输入提交消息' }]}
+          >
+            <AntInput.TextArea rows={3} />
+          </Form.Item>
+          
+          <Form.Item
+            label="状态"
+            name="status"
+          >
+            <Select>
+              <Select.Option value="draft">草稿</Select.Option>
+              <Select.Option value="committed">已提交</Select.Option>
+              <Select.Option value="failed">失败</Select.Option>
+            </Select>
+          </Form.Item>
+          
+          <Form.Item
+            label="质量评分"
+            name="user_rating"
+          >
+            <Rate />
+          </Form.Item>
+          
+          <Form.Item
+            label="用户反馈"
+            name="user_feedback"
+          >
+            <AntInput.TextArea rows={3} placeholder="可选的用户反馈..." />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

@@ -223,14 +223,14 @@ export const usersAPI = {
 // Commits API
 export const commitsAPI = {
   // 获取所有提交记录(管理员)
-  getAllCommits: async (params: {
+  getAllCommits: async (params?: {
     skip?: number;
     limit?: number;
     repository_name?: string;
     username?: string;
     start_date?: string;
     end_date?: string;
-  } = {}): Promise<{
+  }): Promise<{
     commits: Array<{
       id: number;
       user_id: number;
@@ -256,18 +256,20 @@ export const commitsAPI = {
     skip: number;
     limit: number;
   }> => {
-    const queryParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        queryParams.append(key, value.toString());
-      }
-    });
-    const response = await apiClient.get(`/v1/admin/commits?${queryParams}`);
+    const searchParams = new URLSearchParams();
+    if (params?.skip !== undefined) searchParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) searchParams.append('limit', params.limit.toString());
+    if (params?.repository_name) searchParams.append('repository_name', params.repository_name);
+    if (params?.username) searchParams.append('username', params.username);
+    if (params?.start_date) searchParams.append('start_date', params.start_date);
+    if (params?.end_date) searchParams.append('end_date', params.end_date);
+    
+    const response = await apiClient.get(`/v1/admin/commits?${searchParams}`);
     return response.data;
   },
 
   // 获取提交分析数据
-  getCommitAnalytics: async (days = 30): Promise<{
+  getCommitAnalytics: async (days: number = 30): Promise<{
     daily_trends: Array<{ date: string; commit_count: number }>;
     user_activity: Array<{ username: string; commit_count: number }>;
     repository_activity: Array<{ repository_name: string; commit_count: number }>;
@@ -282,25 +284,21 @@ export const commitsAPI = {
 
   // 搜索提交记录（保持原有的用户接口）
   searchCommits: async (params: {
-    userId?: number;
     query?: string;
-    repositoryName?: string;
-    commitStyle?: string;
-    minRating?: number;
+    repository_name?: string;
+    commit_style?: string;
+    min_rating?: number;
     skip?: number;
     limit?: number;
   }): Promise<CommitInfo[]> => {
-    const queryParams = new URLSearchParams();
+    const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined) {
-        queryParams.append(key === 'userId' ? 'user_id' : 
-                          key === 'repositoryName' ? 'repository_name' :
-                          key === 'commitStyle' ? 'commit_style' :
-                          key === 'minRating' ? 'min_rating' : key, 
-                          value.toString());
+      if (value !== undefined && value !== null) {
+        searchParams.append(key, value.toString());
       }
     });
-    const response = await apiClient.get(`/v1/commits/admin/search?${queryParams}`);
+    
+    const response = await apiClient.get(`/v1/commits/admin/search?${searchParams}`);
     return response.data;
   },
 
@@ -314,6 +312,22 @@ export const commitsAPI = {
   getCommitDetail: async (commitId: number): Promise<CommitInfo> => {
     const response = await apiClient.get(`/v1/commits/${commitId}`);
     return response.data;
+  },
+
+  // 更新提交
+  updateCommit: async (commitId: number, data: {
+    final_commit_message?: string;
+    user_rating?: number;
+    user_feedback?: string;
+    status?: string;
+  }): Promise<CommitInfo> => {
+    const response = await apiClient.patch(`/v1/commits/${commitId}`, data);
+    return response.data;
+  },
+
+  // 删除提交
+  deleteCommit: async (commitId: number): Promise<void> => {
+    await apiClient.delete(`/v1/commits/${commitId}`);
   }
 };
 
