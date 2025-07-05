@@ -31,16 +31,16 @@ interface CommitRecord {
   id: number;
   user_id: number;
   username: string;
-  repository_name: string;
+  repository_name: string | null;
   repository_url?: string;
-  branch_name: string;
+  branch_name: string | null;
   commit_hash?: string;
   ai_generated_message?: string;
   final_commit_message: string;
   commit_style: string;
   lines_added: number;
   lines_deleted: number;
-  files_changed: string[];
+  files_changed: string[] | null;
   ai_model_used?: string;
   generation_time_ms?: number;
   user_rating?: number;
@@ -163,11 +163,11 @@ const CommitHistory: React.FC = () => {
       dataIndex: 'repository_name',
       key: 'repository_name',
       width: 200,
-      render: (text: string, record: CommitRecord) => (
+      render: (text: string | null, record: CommitRecord) => (
         <div>
           <div>
             <BranchesOutlined style={{ marginRight: 4 }} />
-            {text}
+            {text || '未知仓库'}
           </div>
           {record.branch_name && (
             <div style={{ fontSize: '12px', color: '#999' }}>
@@ -195,11 +195,11 @@ const CommitHistory: React.FC = () => {
                   <span style={{ margin: '0 8px' }}>•</span>
                 </>
               )}
-              {record.files_changed.length} 个文件
+              {(record.files_changed || []).length} 个文件
               <span style={{ margin: '0 8px' }}>•</span>
-              <span style={{ color: '#52c41a' }}>+{record.lines_added}</span>
+              <span style={{ color: '#52c41a' }}>+{record.lines_added || 0}</span>
               <span style={{ margin: '0 4px' }}>/</span>
-              <span style={{ color: '#ff4d4f' }}>-{record.lines_deleted}</span>
+              <span style={{ color: '#ff4d4f' }}>-{record.lines_deleted || 0}</span>
             </div>
           </div>
         </Tooltip>
@@ -263,13 +263,14 @@ const CommitHistory: React.FC = () => {
     const matchesSearch = !searchText || 
       commit.final_commit_message.toLowerCase().includes(searchText.toLowerCase()) ||
       commit.username.toLowerCase().includes(searchText.toLowerCase()) ||
-      commit.repository_name.toLowerCase().includes(searchText.toLowerCase());
+      (commit.repository_name && commit.repository_name.toLowerCase().includes(searchText.toLowerCase())) ||
+      (commit.branch_name && commit.branch_name.toLowerCase().includes(searchText.toLowerCase()));
 
     return matchesSearch;
   });
 
-  const repositories = [...new Set(commits.map(c => c.repository_name))];
-  const users = [...new Set(commits.map(c => c.username))];
+  const repositories = [...new Set(commits.map(c => c.repository_name).filter(Boolean))];
+  const users = [...new Set(commits.map(c => c.username).filter(Boolean))];
 
   const handleTableChange = (page: number, pageSize?: number) => {
     setPagination(prev => ({
