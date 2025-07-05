@@ -31,7 +31,8 @@ def get_openai_client(api_key: Optional[str] = None, api_base_url: Optional[str]
 def call_llm_api(system_content: str, user_content: str, 
                 api_key: Optional[str] = None, 
                 api_base_url: Optional[str] = None, 
-                model_name: Optional[str] = None) -> str:
+                model_name: Optional[str] = None,
+                use_json_format: bool = False) -> str:
     """
     调用 LLM API
     
@@ -41,6 +42,7 @@ def call_llm_api(system_content: str, user_content: str,
         api_key: CLI传递的API密钥
         api_base_url: CLI传递的API基础URL
         model_name: CLI传递的模型名称
+        use_json_format: 是否使用JSON格式输出
     
     Returns:
         str: LLM 响应内容
@@ -51,16 +53,21 @@ def call_llm_api(system_content: str, user_content: str,
         # 优先使用CLI传递的模型名称，没有则使用服务端配置
         model = model_name or settings.OPENAI_MODEL
         
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        params = {
+            "model": model,
+            "messages": [
                 {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content}
             ],
-            max_tokens=settings.MAX_TOKENS,
-            temperature=settings.TEMPERATURE,
-            response_format={"type": "json_object"}
-        )
+            "max_tokens": settings.MAX_TOKENS,
+            "temperature": settings.TEMPERATURE,
+        }
+        
+        # 根据参数决定是否使用JSON格式
+        if use_json_format:
+            params["response_format"] = {"type": "json_object"}
+        
+        response = client.chat.completions.create(**params)
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"Error calling LLM API: {str(e)}"
@@ -176,7 +183,10 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
         
         print("===========================\n")
         
-        result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name)
+        # 根据任务类型决定是否使用JSON格式
+        use_json = task_type not in ["commit_message"]
+        
+        result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name, use_json)
         
         print(f"LLM response: {result}")
         print("=== END LLM DEBUG ===\n")
