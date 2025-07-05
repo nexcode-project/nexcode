@@ -74,6 +74,7 @@ class CommitInfoBase(BaseModel):
     
     commit_style: str = "conventional"
     tags: Optional[List[str]] = None
+    status: Optional[str] = "draft"
 
 class CommitInfoCreate(CommitInfoBase):
     pass
