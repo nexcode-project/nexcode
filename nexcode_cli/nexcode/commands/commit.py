@@ -192,6 +192,44 @@ def commit(message, style, auto):
             click.echo(f"✅ 代码已成功提交!")
             click.echo(f"📝 提交消息: {final_message}")
             
+            # 获取最新commit hash
+            try:
+                hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
+                commit_hash = hash_result.stdout.strip()
+            except subprocess.CalledProcessError:
+                commit_hash = None
+
+            # 获取当前分支和远程仓库信息
+            branch_name = get_current_branch() or ''
+            try:
+                remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], capture_output=True, text=True, check=True)
+                repository_url = remote_url_result.stdout.strip()
+                # 提取仓库名
+                import re, os
+                repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
+                repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
+            except subprocess.CalledProcessError:
+                repository_url = None
+                repository_name = None
+
+            # 调用后端API保存commit信息
+            commit_payload = {
+                'repository_url': repository_url,
+                'repository_name': repository_name,
+                'branch_name': branch_name,
+                'commit_hash': commit_hash,
+                'ai_generated_message': final_message,
+                'final_commit_message': final_message,
+                'diff_content': diff,
+                'commit_style': style,
+                'status': 'committed'
+            }
+            save_result = api_client.create_commit_info(commit_payload)
+            if 'error' in save_result:
+                click.echo(f"⚠️  无法保存Commit信息: {save_result['error']}")
+            else:
+                click.echo("📦 Commit信息已保存到服务器")
+            
         except subprocess.CalledProcessError as e:
             click.echo(f"❌ 提交失败: {e}")
             return
