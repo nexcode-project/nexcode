@@ -22,6 +22,7 @@ import {
   DeleteOutlined,
   KeyOutlined,
 } from '@ant-design/icons';
+import { usersAPI } from '../services/api';
 
 const { Title } = Typography;
 
@@ -52,52 +53,43 @@ const UserManagement: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
-  const [selectedUserKeys] = useState<APIKey[]>([]);
+  const [selectedUserKeys, setSelectedUserKeys] = useState<APIKey[]>([]);
   const [form] = Form.useForm();
 
-  // 模拟数据加载
   useEffect(() => {
     loadUsers();
   }, []);
 
   const loadUsers = async () => {
     setLoading(true);
-    // 模拟API调用
-    setTimeout(() => {
-      const mockUsers: User[] = [
-        {
-          id: 1,
-          username: 'admin',
-          email: 'admin@nexcode.local',
-          is_active: true,
-          is_superuser: true,
-          created_at: '2024-01-15T10:30:00Z',
-          last_login: '2024-01-20T15:22:00Z',
-          api_keys_count: 2,
-        },
-        {
-          id: 2,
-          username: 'developer1',
-          email: 'dev1@company.com',
-          is_active: true,
-          is_superuser: false,
-          created_at: '2024-01-16T09:15:00Z',
-          last_login: '2024-01-19T14:30:00Z',
-          api_keys_count: 1,
-        },
-        {
-          id: 3,
-          username: 'testuser',
-          email: 'test@company.com',
-          is_active: false,
-          is_superuser: false,
-          created_at: '2024-01-17T11:45:00Z',
-          api_keys_count: 0,
-        },
-      ];
-      setUsers(mockUsers);
+    try {
+      const apiUsers = await usersAPI.getAllUsers(0, 1000);
+      const enriched: User[] = await Promise.all(apiUsers.map(async (u) => {
+        let apiKeysCount = 0;
+        try {
+          const keys = await usersAPI.getUserAPIKeys(u.id);
+          apiKeysCount = keys.length;
+        } catch (e) {
+          console.error('获取API密钥失败', e);
+        }
+        return {
+          id: u.id,
+          username: u.username,
+          email: u.email,
+          is_active: u.is_active,
+          is_superuser: u.is_superuser,
+          created_at: u.created_at,
+          last_login: u.last_login,
+          api_keys_count: apiKeysCount,
+        } as User;
+      }));
+      setUsers(enriched);
+    } catch (error) {
+      console.error('加载用户失败:', error);
+      message.error('加载用户失败');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleCreate = () => {
@@ -119,9 +111,9 @@ const UserManagement: React.FC = () => {
 
   const handleDelete = async (userId: number) => {
     try {
-      // 模拟删除API调用
-      setUsers(users.filter(user => user.id !== userId));
+      await usersAPI.deleteUser(userId);
       message.success('用户删除成功');
+      loadUsers();
     } catch (error) {
       message.error('删除失败');
     }
@@ -130,33 +122,38 @@ const UserManagement: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       if (editingUser) {
-        // 更新用户
-        const updatedUsers = users.map(user =>
-          user.id === editingUser.id ? { ...user, ...values } : user
-        );
-        setUsers(updatedUsers);
+        await usersAPI.updateUser(editingUser.id, values);
         message.success('用户更新成功');
       } else {
-        // 创建新用户
-        const newUser: User = {
-          id: Date.now(),
-          ...values,
-          created_at: new Date().toISOString(),
-          api_keys_count: 0,
-        };
-        setUsers([...users, newUser]);
+        await usersAPI.createUser(values);
         message.success('用户创建成功');
       }
       setModalVisible(false);
+      loadUsers();
     } catch (error) {
       message.error('操作失败');
     }
   };
 
-  const handleViewAPIKeys = (user: User) => {
-    // 查看API密钥逻辑
-    console.log('Viewing API keys for user:', user.username);
-    message.info('API密钥管理功能开发中');
+  const handleViewAPIKeys = async (user: User) => {
+    try {
+      setLoading(true);
+      const keys = await usersAPI.getUserAPIKeys(user.id);
+      setSelectedUserKeys(keys.map(k => ({
+        id: k.id,
+        key_name: k.name,
+        key_prefix: k.key_hash.substring(0, 6),
+        is_active: k.is_active,
+        usage_count: 0,
+        created_at: k.created_at,
+        last_used: k.last_used,
+      })));
+      setApiKeysVisible(true);
+    } catch (error) {
+      message.error('获取API密钥失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const columns = [
