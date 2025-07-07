@@ -6,7 +6,8 @@ from app.core.dependencies import CurrentUser, CurrentSuperUser, DatabaseSession
 from app.services.auth_service import auth_service
 from app.models.user_schemas import (
     UserResponse, UserUpdate, UserProfile, UserCASLogin, Token,
-    APIKeyCreate, APIKeyResponse, APIKeyWithToken, UserSessionResponse
+    APIKeyCreate, APIKeyResponse, APIKeyWithToken, UserSessionResponse,
+    UserCreate
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -243,4 +244,45 @@ async def deactivate_user(
     user.is_active = False
     await db.commit()
     
-    return {"message": f"User {user.username} deactivated successfully"} 
+    return {"message": f"User {user.username} deactivated successfully"}
+
+# 新增：管理员创建用户
+@router.post("/admin/create", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def admin_create_user(
+    user_create: UserCreate,
+    admin_user: CurrentSuperUser,
+    db: DatabaseSession
+):
+    """管理员创建新用户"""
+    # 检查用户名是否已存在
+    existing_user = await auth_service.get_user_by_username(db, user_create.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+
+    # 检查邮箱是否已存在
+    if user_create.email:
+        existing_email = await auth_service.get_user_by_email(db, user_create.email)
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already in use"
+            )
+
+    # 创建用户
+    user = await auth_service.create_user(db, user_create)
+    return UserResponse.model_validate(user)
+
+# 兼容老前端：/users/admin/all
+@router.get("/admin/all", response_model=List[UserResponse])
+async def admin_list_users_alias(
+    admin_user: CurrentSuperUser,
+    db: DatabaseSession,
+    skip: int = 0,
+    limit: int = 100,
+    search: Optional[str] = None
+):
+    """获取用户列表（管理员）老接口兼容"""
+    return await list_users(admin_user, db, skip, limit, search) 

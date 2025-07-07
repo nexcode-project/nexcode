@@ -55,15 +55,22 @@ const UserManagement: React.FC = () => {
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [selectedUserKeys, setSelectedUserKeys] = useState<APIKey[]>([]);
   const [form] = Form.useForm();
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  const [searchText, setSearchText] = useState('');
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    fetchUsers();
+  }, [pagination.current, pagination.pageSize, searchText]);
 
-  const loadUsers = async () => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
-      const apiUsers = await usersAPI.getAllUsers(0, 1000);
+      const params = {
+        skip: (pagination.current - 1) * pagination.pageSize,
+        limit: pagination.pageSize,
+        search: searchText || undefined,
+      };
+      const apiUsers = await usersAPI.getAllUsers(params.skip, params.limit);
       const enriched: User[] = await Promise.all(apiUsers.map(async (u) => {
         let apiKeysCount = 0;
         try {
@@ -84,6 +91,7 @@ const UserManagement: React.FC = () => {
         } as User;
       }));
       setUsers(enriched);
+      setPagination((prev) => ({ ...prev, total: apiUsers.length }));
     } catch (error) {
       console.error('加载用户失败:', error);
       message.error('加载用户失败');
@@ -113,7 +121,7 @@ const UserManagement: React.FC = () => {
     try {
       await usersAPI.deleteUser(userId);
       message.success('用户删除成功');
-      loadUsers();
+      fetchUsers();
     } catch (error) {
       message.error('删除失败');
     }
@@ -129,7 +137,7 @@ const UserManagement: React.FC = () => {
         message.success('用户创建成功');
       }
       setModalVisible(false);
-      loadUsers();
+      fetchUsers();
     } catch (error) {
       message.error('操作失败');
     }
@@ -282,11 +290,23 @@ const UserManagement: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Title level={2}>用户管理</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-          添加用户
-        </Button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Title level={2} style={{ margin: 0 }}>用户管理</Title>
+        <Space>
+          <Input.Search
+            placeholder="搜索用户名/邮箱"
+            allowClear
+            enterButton
+            onSearch={(value) => {
+              setSearchText(value.trim());
+              setPagination((prev) => ({ ...prev, current: 1 }));
+            }}
+            style={{ width: 240 }}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            添加用户
+          </Button>
+        </Space>
       </div>
 
       <Card>
@@ -296,8 +316,9 @@ const UserManagement: React.FC = () => {
           rowKey="id"
           loading={loading}
           pagination={{
-            total: users.length,
-            pageSize: 10,
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: pagination.total,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) => 
@@ -336,6 +357,17 @@ const UserManagement: React.FC = () => {
           >
             <Input placeholder="输入邮箱地址" />
           </Form.Item>
+
+          {/* 仅在添加模式显示密码输入 */}
+          {!editingUser && (
+            <Form.Item
+              name="password"
+              label="密码"
+              rules={[{ required: true, message: '请输入初始密码' }]}
+            >
+              <Input.Password placeholder="输入初始密码" />
+            </Form.Item>
+          )}
 
           <Form.Item name="is_active" label="账户状态" valuePropName="checked">
             <Switch checkedChildren="激活" unCheckedChildren="禁用" />
