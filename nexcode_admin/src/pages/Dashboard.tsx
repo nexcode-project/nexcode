@@ -79,6 +79,8 @@ const Dashboard: React.FC = () => {
   const [recentCommits, setRecentCommits] = useState<CommitRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [commitTrendData, setCommitTrendData] = useState<any[]>([]);
+  const [styleDistribution, setStyleDistribution] = useState<any[]>([]);
 
   const fetchDashboardData = async () => {
     try {
@@ -86,9 +88,10 @@ const Dashboard: React.FC = () => {
       setError(null);
 
       // 并行获取系统统计和最近提交
-      const [systemStats, commitsResponse] = await Promise.all([
+      const [systemStats, commitsResponse, analytics] = await Promise.all([
         systemAPI.getSystemStats(),
-        commitsAPI.getAllCommits({ skip: 0, limit: 10 }).catch(() => ({ commits: [], total: 0, skip: 0, limit: 10 })) // 获取最近10条提交
+        commitsAPI.getAllCommits({ skip: 0, limit: 100 }).catch(() => ({ commits: [], total: 0, skip: 0, limit: 100 })), // 获取最近100条提交用于统计
+        commitsAPI.getCommitAnalytics(7).catch(() => ({ daily_trends: [] }))
       ]);
 
       // 尝试获取健康检查数据（可选）
@@ -139,8 +142,31 @@ const Dashboard: React.FC = () => {
           status: 'success',
         },
       ]);
-      // 确保recentCommits是数组
-      setRecentCommits(Array.isArray(commitsResponse.commits) ? commitsResponse.commits : []);
+      // 处理提交趋势数据
+      const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+      const trend = (analytics.daily_trends || []).map(({ date, commit_count }) => {
+        const d = new Date(date);
+        return { name: dayNames[d.getDay()], commits: commit_count, rating: 0 };
+      });
+      setCommitTrendData(trend);
+
+      // 处理提交风格分布
+      const styleCounts: Record<string, number> = {};
+      (commitsResponse.commits || []).forEach(c => {
+        if (c.commit_style) {
+          styleCounts[c.commit_style] = (styleCounts[c.commit_style] || 0) + 1;
+        }
+      });
+      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#83a6ed'];
+      const styleDist = Object.entries(styleCounts).map(([name, value], idx) => ({
+        name,
+        value,
+        color: colors[idx % colors.length],
+      }));
+      setStyleDistribution(styleDist);
+
+      // 仅展示最近10条提交
+      setRecentCommits((commitsResponse.commits || []).slice(0, 10));
     } catch (err: any) {
       console.error('获取Dashboard数据失败:', err);
       setError(err.message || '获取数据失败');
@@ -158,24 +184,6 @@ const Dashboard: React.FC = () => {
     const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, []);
-
-  // 模拟图表数据（后续可以从API获取真实数据）
-  const commitTrendData = [
-    { name: '周一', commits: 12, rating: 4.2 },
-    { name: '周二', commits: 19, rating: 4.5 },
-    { name: '周三', commits: 15, rating: 4.1 },
-    { name: '周四', commits: 22, rating: 4.7 },
-    { name: '周五', commits: 18, rating: 4.3 },
-    { name: '周六', commits: 8, rating: 4.0 },
-    { name: '周日', commits: 6, rating: 4.1 },
-  ];
-
-  const styleDistribution = [
-    { name: 'Conventional', value: 45, color: '#8884d8' },
-    { name: 'Angular', value: 25, color: '#82ca9d' },
-    { name: 'Gitmoji', value: 20, color: '#ffc658' },
-    { name: 'Simple', value: 10, color: '#ff7c7c' },
-  ];
 
   const columns = [
     {

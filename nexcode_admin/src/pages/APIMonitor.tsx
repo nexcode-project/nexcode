@@ -20,6 +20,7 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { monitoringAPI } from '../services/api';
 
 const { Title } = Typography;
 
@@ -63,65 +64,43 @@ const APIMonitor: React.FC = () => {
 
   const loadData = async () => {
     setLoading(true);
-    
-    // 模拟API数据
-    setTimeout(() => {
-      const mockMetrics: APIMetrics = {
-        total_requests: 15847,
-        successful_requests: 15203,
-        failed_requests: 644,
-        avg_response_time: 245,
-        peak_rps: 89,
-        active_users: 23,
-      };
+    try {
+      // 并行获取API统计和实时数据
+      const [stats, realtime] = await Promise.all([
+        monitoringAPI.getAPIStats('24h'),
+        monitoringAPI.getRealtimeMetrics()
+      ]);
 
-      const mockEndpoints: APIEndpoint[] = [
-        {
-          endpoint: '/v1/commit-message',
-          method: 'POST',
-          status: 'healthy',
-          response_time: 180,
-          success_rate: 98.5,
-          requests_24h: 4567,
-        },
-        {
-          endpoint: '/v1/code-review',
-          method: 'POST',
-          status: 'healthy',
-          response_time: 234,
-          success_rate: 97.2,
-          requests_24h: 3421,
-        },
-        {
-          endpoint: '/v1/git-error',
-          method: 'POST',
-          status: 'warning',
-          response_time: 456,
-          success_rate: 94.8,
-          requests_24h: 2134,
-        },
-        {
-          endpoint: '/v1/code-quality-check',
-          method: 'POST',
-          status: 'healthy',
-          response_time: 312,
-          success_rate: 96.7,
-          requests_24h: 1876,
-        },
-        {
-          endpoint: '/v1/chat/completions',
-          method: 'POST',
-          status: 'error',
-          response_time: 892,
-          success_rate: 89.3,
-          requests_24h: 987,
-        },
-      ];
+      // 设置总体指标
+      setMetrics({
+        total_requests: stats.total_calls,
+        successful_requests: stats.successful_calls,
+        failed_requests: stats.failed_calls,
+        avg_response_time: stats.avg_response_time,
+        peak_rps: realtime.requests_per_minute,
+        active_users: realtime.active_connections,
+      });
 
-      setMetrics(mockMetrics);
-      setEndpoints(mockEndpoints);
+      // 转换接口详情
+      const transformedEndpoints: APIEndpoint[] = stats.endpoints.map((ep) => {
+        const status: 'healthy' | 'warning' | 'error' =
+          ep.success_rate >= 95 ? 'healthy' : ep.success_rate >= 90 ? 'warning' : 'error';
+        return {
+          endpoint: ep.path,
+          method: 'GET',
+          status,
+          response_time: ep.avg_response_time,
+          success_rate: ep.success_rate,
+          requests_24h: ep.calls,
+        };
+      });
+
+      setEndpoints(transformedEndpoints);
+    } catch (error) {
+      console.error('加载API监控数据失败:', error);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   // 模拟时间序列数据
@@ -214,7 +193,7 @@ const APIMonitor: React.FC = () => {
     },
   ];
 
-  const successRate = (metrics.successful_requests / metrics.total_requests) * 100;
+  const successRate = metrics.total_requests > 0 ? (metrics.successful_requests / metrics.total_requests) * 100 : 0;
 
   return (
     <div>
