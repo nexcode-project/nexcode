@@ -193,13 +193,16 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
         if task_type == "commit_message":
             # 提交消息需要更高的确定性和一致性
             temperature = config.get("model", {}).get("commit_temperature", 0.05)  # 进一步降低温度
-            max_tokens = config.get("model", {}).get("max_tokens_commit", 20000)    # 限制token数，确保简洁
+            max_tokens = config.get("model", {}).get("max_tokens_commit", 20)       # 严格限制token数，确保简洁
         else:
             # 其他任务使用默认温度
             temperature = None
             max_tokens = None
         
         if temperature is not None:
+            # 为提交消息添加停止序列
+            stop_sequences = ["\n", "。", "！", "？"] if task_type == "commit_message" else None
+            
             result = call_llm_api_with_params(
                 system_content=system_content,
                 user_content=user_content,
@@ -208,6 +211,7 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
                 model_name=model_name,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                stop=stop_sequences
             )
         else:
             result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name, use_json)

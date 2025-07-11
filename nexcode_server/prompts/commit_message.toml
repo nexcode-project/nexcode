@@ -9,6 +9,8 @@ content = """
 1. **只输出一行提交消息**，不要任何解释、说明或额外文本
 2. **长度控制在50字符以内**，最多不超过72字符
 3. **使用Conventional Commits格式**：type(scope): description
+4. **严格禁止**：不要输出任何分析过程、推理步骤或元信息
+5. **只输出最终结果**：例如 "feat: add user authentication" 或 "fix: resolve null pointer"
 
 ## 类型识别规则：
 - `feat:` 新功能、新特性、新API、新组件、新页面、新模块
@@ -21,6 +23,23 @@ content = """
 - `build:` 构建系统、依赖管理（webpack, npm, gulp等）
 - `ci:` CI配置文件和脚本（Travis, Circle, GitHub Actions等）
 - `chore:` 其他杂项任务、配置更新、工具脚本
+
+## Git Diff 格式说明：
+理解diff格式对正确分析变更至关重要：
+
+- `+` 开头的行：新增的代码行
+- `-` 开头的行：删除的代码行  
+- `diff --git a/file b/file`：标识要比较的文件
+- `index hash..hash`：文件的Git对象哈希
+- `--- a/file` 和 `+++ b/file`：分别表示旧版本和新版本文件
+- `@@ -start,count +start,count @@`：行号和变更范围信息
+- 普通行（无+/-前缀）：上下文行，未发生变更
+
+**关键原则**：
+- 多个`+`行且无对应`-`行 = 新增功能 (feat)
+- 多个`-`行且无对应`+`行 = 删除功能 (可能是refactor或chore)
+- 相同数量的`+`和`-`行 = 修改功能 (可能是fix、feat或refactor)
+- 文件重命名会显示为删除旧文件+新增新文件
 
 ## 深度分析步骤：
 1. **识别文件类型和路径**：
@@ -87,17 +106,41 @@ template = """
 - 仓库上下文：{{ context }}
 
 ## 深度分析要求：
-1. **逐行分析diff**：仔细阅读每一行变更，理解代码逻辑
-2. **识别变更模式**：是新增、修改、删除还是重构？
-3. **理解业务影响**：这个变更对用户有什么影响？
-4. **确定变更类型**：根据上述分析选择最准确的conventional commit类型
-5. **生成精确描述**：用最简洁的词汇描述变更的核心价值
+1. **精确解读diff符号**：
+   - 统计 `+` 行数量和内容：这些是新增的代码
+   - 统计 `-` 行数量和内容：这些是删除的代码
+   - 分析变更比例：纯新增vs纯删除vs修改
+   
+2. **逐行分析变更内容**：
+   - 新增的函数、变量、配置 = feat
+   - 删除的过时代码、功能 = refactor/chore
+   - 修改的逻辑、算法 = fix/feat/perf
+   - 调整的格式、注释 = style/docs
+   
+3. **识别变更模式**：
+   - 文件新增：feat（新功能）
+   - 文件删除：refactor（重构）或chore（清理）
+   - 大量新增代码：feat（新功能）
+   - 大量删除代码：refactor（重构）或fix（移除bug）
+   - 等量增删：fix（修复）或refactor（重构）
+   
+4. **理解业务影响**：这个变更对用户有什么影响？
+5. **确定变更类型**：根据diff符号分析选择最准确的conventional commit类型
+6. **生成精确描述**：用最简洁的词汇描述变更的核心价值
 
-## 输出要求：
-- 只输出一行提交消息，格式：type: description
-- 不要包含任何解释、代码块或其他内容
-- 描述要准确反映代码变更的真实意图
-- 优先选择最能体现变更价值的commit类型
+## 严格输出要求：
+- **仅输出一行**：type: description 格式的提交消息
+- **禁止任何额外内容**：不要解释、不要分析过程、不要代码块
+- **长度限制**：50字符以内，最多72字符
+- **简洁明了**：准确反映代码变更的核心价值
 
-请基于以上分析直接输出提交消息：
+## 示例输出格式：
+```
+feat: add user authentication
+fix: resolve division by zero error  
+docs: update API documentation
+refactor: simplify data processing logic
+```
+
+请严格按照上述要求，基于diff分析直接输出一行提交消息：
 """

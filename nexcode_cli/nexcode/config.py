@@ -35,8 +35,8 @@ DEFAULT_CONFIG = {
         "commit_temperature": 0.1,
         # Temperature for solution generation.
         "solution_temperature": 0.1,
-        # Increased token limits for better context handling
-        "max_tokens_commit": 100,
+        # Token limits for concise output
+        "max_tokens_commit": 20,        # 严格限制提交消息长度
         "max_tokens_solution": 2048
     },
     "commit": {
