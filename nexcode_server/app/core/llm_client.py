@@ -1,3 +1,4 @@
+from nexcode.config import load_config
 import openai
 from typing import Dict, Any, Optional, Union, List
 from .config import settings
@@ -158,7 +159,7 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
     try:
         print(f"\n=== LLM DEBUG ({task_type}) ===")
         print(f"Data keys: {list(data.keys())}")
-        
+        config = load_config()
         system_content, user_content = get_rendered_prompts(task_type, data)
         
         print(f"System prompt length: {len(system_content)}")
@@ -186,13 +187,15 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
         # 根据任务类型决定是否使用JSON格式和调整温度
         use_json = task_type not in ["commit_message"]
         
-        # 为不同任务类型使用不同的温度设置
+        # 为不同任务类型使用不同的温度设置和参数
         if task_type == "commit_message":
-            # 提交消息需要更高的确定性
-            temperature = 0.1
+            # 提交消息需要更高的确定性和一致性
+            temperature = config.get("model", {}).get("commit_temperature", 0.05)  # 进一步降低温度
+            max_tokens = config.get("model", {}).get("max_tokens_commit", 20000)    # 限制token数，确保简洁
         else:
             # 其他任务使用默认温度
             temperature = None
+            max_tokens = None
         
         if temperature is not None:
             result = call_llm_api_with_params(
@@ -201,7 +204,8 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
                 api_key=api_key,
                 api_base_url=api_base_url,
                 model_name=model_name,
-                temperature=temperature
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
         else:
             result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name, use_json)

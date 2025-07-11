@@ -5,12 +5,13 @@ from typing import Dict, Any
 # 获取 prompts 目录路径
 PROMPT_DIR = Path(__file__).parent.parent.parent / "prompts"
 
-def load_prompt(prompt_name: str) -> Dict[str, Any]:
+def load_prompt(prompt_name: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
     """
-    加载指定的 prompt 配置文件
+    加载指定的 prompt 配置文件，支持自动选择优化版本
     
     Args:
         prompt_name: prompt 文件名（不含扩展名）
+        context: 上下文信息，用于判断是否使用中文优化版本
     
     Returns:
         Dict: prompt 配置内容
@@ -18,6 +19,22 @@ def load_prompt(prompt_name: str) -> Dict[str, Any]:
     Raises:
         FileNotFoundError: 如果 prompt 文件不存在
     """
+    # 检查是否有中文内容，如果有则尝试使用中文优化版本
+    use_zh_optimized = False
+    if context and prompt_name == "commit_message":
+        # 检查diff或其他内容是否包含中文
+        diff_content = context.get('diff', '')
+        if diff_content and any('\u4e00' <= char <= '\u9fff' for char in diff_content):
+            use_zh_optimized = True
+    
+    # 尝试使用中文优化版本
+    if use_zh_optimized:
+        zh_prompt_path = PROMPT_DIR / f"{prompt_name}_zh.toml"
+        if zh_prompt_path.exists():
+            print(f"Using Chinese-optimized prompt: {prompt_name}_zh.toml")
+            return toml.load(zh_prompt_path)
+    
+    # 使用默认版本
     prompt_path = PROMPT_DIR / f"{prompt_name}.toml"
     if not prompt_path.exists():
         raise FileNotFoundError(f"Prompt file {prompt_path} not found.")
@@ -55,7 +72,7 @@ def get_rendered_prompts(task_type: str, context: Dict[str, Any]) -> tuple[str, 
     Returns:
         tuple: (system_prompt, user_prompt)
     """
-    prompt_config = load_prompt(task_type)
+    prompt_config = load_prompt(task_type, context)
     
     system_content = prompt_config.get("system", {}).get("content", "")
     user_template = prompt_config.get("user", {}).get("template", "")

@@ -12,6 +12,60 @@ router = APIRouter()
 # 配置diff长度限制 - 增加到更大的值以保持更多上下文
 MAX_DIFF_LENGTH = 65536  # 64KB，足够包含大部分代码变更
 
+def clean_commit_message(message: str) -> str:
+    """
+    清理和优化AI生成的提交消息
+    """
+    if not message:
+        return "chore: update code"
+    
+    # 移除可能的格式标记
+    message = message.replace('```', '').replace('`', '').strip()
+    
+    # 只取第一行
+    first_line = message.split('\n')[0].strip()
+    
+    # 移除引号和多余空格
+    first_line = first_line.strip('"\'`').strip()
+    
+    # 确保不超过72字符
+    if len(first_line) > 72:
+        first_line = first_line[:69] + "..."
+    
+    # 验证conventional commits格式
+    valid_prefixes = ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:', 'build:', 'ci:', 'perf:']
+    
+    if not any(first_line.startswith(prefix) for prefix in valid_prefixes):
+        # 智能判断类型并添加前缀
+        lower_msg = first_line.lower()
+        if any(word in lower_msg for word in ['fix', 'bug', 'error', 'issue']):
+            first_line = f"fix: {first_line}"
+        elif any(word in lower_msg for word in ['add', 'new', 'create', 'implement']):
+            first_line = f"feat: {first_line}"
+        elif any(word in lower_msg for word in ['update', 'modify', 'change', 'improve']):
+            first_line = f"refactor: {first_line}"
+        elif any(word in lower_msg for word in ['doc', 'readme', 'comment']):
+            first_line = f"docs: {first_line}"
+        elif any(word in lower_msg for word in ['test', 'spec']):
+            first_line = f"test: {first_line}"
+        elif any(word in lower_msg for word in ['config', 'setting', 'setup']):
+            first_line = f"chore: {first_line}"
+        else:
+            first_line = f"chore: {first_line}"
+    
+    # 确保描述部分不重复type
+    for prefix in valid_prefixes:
+        if first_line.startswith(prefix):
+            description = first_line[len(prefix):].strip()
+            # 移除描述中重复的type关键词
+            description = description.replace(prefix.replace(':', ''), '').strip()
+            if description.startswith(':'):
+                description = description[1:].strip()
+            first_line = prefix + ' ' + description
+            break
+    
+    return first_line
+
 def truncate_diff(diff: str) -> str:
     """
     智能截取diff内容，优先保持重要的代码变更信息
@@ -95,6 +149,10 @@ async def generate_commit_message(
         )
         
         print(f"Generated message: {message}")
+        
+        # 清理和优化生成的消息
+        cleaned_message = clean_commit_message(message)
+        print(f"Cleaned message: {cleaned_message}")
         print("=== END DEBUG ===\n")
         
         generation_time = int((time() - start_time) * 1000)  # 转换为毫秒
@@ -126,7 +184,7 @@ async def generate_commit_message(
                     repository_name=request.context.get('repository_name') if request.context else None,
                     branch_name=request.context.get('branch_name') if request.context else None,
                     ai_generated_message=message,
-                    final_commit_message=message,  # 初始情况下，final和ai生成的相同
+                    final_commit_message=cleaned_message,  # 使用清理后的消息
                     diff_content=truncated_diff,  # 存储截取后的diff
                     files_changed=files_changed,
                     lines_added=lines_added,
@@ -153,6 +211,6 @@ async def generate_commit_message(
                 # 记录数据库错误，但不影响主要功能
                 print(f"Database error: {db_error}")
         
-        return CommitMessageResponse(message=message)
+        return CommitMessageResponse(message=cleaned_message)
     except Exception as e:
         return CommitMessageResponse(message=f"Error generating commit message: {str(e)}") 

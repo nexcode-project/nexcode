@@ -11,40 +11,71 @@ content = """
 3. **使用Conventional Commits格式**：type(scope): description
 
 ## 类型识别规则：
-- `feat:` 新功能、新特性、新API、新组件
-- `fix:` 修复bug、错误处理、异常修复
-- `docs:` 文档更新、注释修改、README变更
+- `feat:` 新功能、新特性、新API、新组件、新页面、新模块
+- `fix:` 修复bug、错误处理、异常修复、逻辑错误修正
+- `docs:` 文档更新、注释修改、README变更、API文档
 - `style:` 代码格式化、空白字符、缺少分号（不改变代码逻辑）
-- `refactor:` 重构代码（既不是新功能也不是修复）
-- `perf:` 性能优化、算法改进
-- `test:` 添加测试、修改测试用例
+- `refactor:` 重构代码（既不是新功能也不是修复）、代码整理、结构优化
+- `perf:` 性能优化、算法改进、查询优化、缓存改进
+- `test:` 添加测试、修改测试用例、测试配置
 - `build:` 构建系统、依赖管理（webpack, npm, gulp等）
 - `ci:` CI配置文件和脚本（Travis, Circle, GitHub Actions等）
-- `chore:` 其他杂项任务
+- `chore:` 其他杂项任务、配置更新、工具脚本
 
-## 分析步骤：
-1. **识别文件类型**：源码、配置、文档、测试等
-2. **分析变更类型**：添加、删除、修改、重命名
-3. **理解业务逻辑**：功能目的、影响范围
-4. **确定主要变更**：如果有多个变更，选择最主要的
+## 深度分析步骤：
+1. **识别文件类型和路径**：
+   - 源码文件 (.py, .js, .tsx, .java等)
+   - 配置文件 (.json, .yaml, .toml等)
+   - 文档文件 (.md, .txt等)
+   - 测试文件 (test_, _test.py等)
+   - 构建文件 (package.json, requirements.txt等)
 
-## 优质示例：
-- `feat: add user authentication module`
-- `fix: resolve null pointer in login validator` 
-- `refactor: extract common util functions`
-- `perf: optimize database query performance`
-- `docs: update API endpoint documentation`
+2. **分析变更模式**：
+   - 新增文件：通常是 feat
+   - 删除文件：通常是 refactor 或 chore  
+   - 修改现有功能：分析是 fix 还是 feat
+   - 重命名/移动：通常是 refactor
+   - 配置调整：通常是 chore 或 build
 
-## 注意事项：
+3. **理解业务逻辑**：
+   - 函数/方法的新增：feat
+   - 参数修改、返回值变更：可能是 fix 或 feat
+   - 异常处理增加：fix
+   - 算法优化：perf
+   - 代码结构调整：refactor
+
+4. **确定主要变更**：
+   - 如果有多个类型的变更，选择影响最大的
+   - 优先级：fix > feat > refactor > docs > style > chore
+
+## 精确示例对照：
+- **新增功能**：`feat: add user authentication module`
+- **修复问题**：`fix: resolve null pointer in login validator`
+- **重构代码**：`refactor: extract common utility functions`
+- **性能优化**：`perf: optimize database query performance`
+- **文档更新**：`docs: update API endpoint documentation`
+- **配置修改**：`chore: update eslint configuration`
+- **依赖管理**：`build: upgrade react to version 18`
+- **测试相关**：`test: add unit tests for auth service`
+
+## 特殊场景处理：
+- **多文件变更**：分析主要变更，避免含糊的描述
+- **API变更**：明确是新增API（feat）还是修改API（fix/refactor）
+- **数据库相关**：migration是build，表结构调整是refactor
+- **界面变更**：新页面是feat，样式调整是style，交互改进是feat
+- **配置优化**：性能相关用perf，其他用chore
+
+## 质量标准：
 - 描述应该说明**做了什么**，而不是**怎么做的**
 - 使用祈使语气（add, fix, update而不是added, fixed, updated）
-- 避免过于技术性的细节
-- 重点突出用户可感知的变化
+- 避免过于技术性的细节，突出用户价值
+- 重点突出最主要的变化，忽略次要修改
+- 如果是多个小改动，归纳为一个主要目标
 """
 
 [user]
 template = """
-请仔细分析以下代码变更，生成一条准确的提交消息：
+请作为资深的Git专家，仔细分析以下代码变更，生成一条准确的提交消息：
 
 ## 代码变更内容：
 ```diff
@@ -53,13 +84,20 @@ template = """
 
 ## 上下文信息：
 - 提交风格偏好：{{ style }}
-- 仓库信息：{{ context }}
+- 仓库上下文：{{ context }}
 
-## 分析要求：
-1. 仔细阅读diff内容，理解代码变更的真实目的
-2. 识别主要的功能变更或修复内容
-3. 确定最合适的conventional commit类型
-4. 生成简洁准确的描述
+## 深度分析要求：
+1. **逐行分析diff**：仔细阅读每一行变更，理解代码逻辑
+2. **识别变更模式**：是新增、修改、删除还是重构？
+3. **理解业务影响**：这个变更对用户有什么影响？
+4. **确定变更类型**：根据上述分析选择最准确的conventional commit类型
+5. **生成精确描述**：用最简洁的词汇描述变更的核心价值
 
-请直接输出一行提交消息，不要包含任何解释或其他内容。
+## 输出要求：
+- 只输出一行提交消息，格式：type: description
+- 不要包含任何解释、代码块或其他内容
+- 描述要准确反映代码变更的真实意图
+- 优先选择最能体现变更价值的commit类型
+
+请基于以上分析直接输出提交消息：
 """
