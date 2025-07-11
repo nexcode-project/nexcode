@@ -21,31 +21,11 @@ import {
   EditOutlined,
   DeleteOutlined,
   KeyOutlined,
+  CopyOutlined,
 } from '@ant-design/icons';
-import { usersAPI } from '../services/api';
+import { usersAPI, type User, type APIKey as APIKeyType } from '../services/api';
 
-const { Title } = Typography;
-
-interface User {
-  id: number;
-  username: string;
-  email: string;
-  is_active: boolean;
-  is_superuser: boolean;
-  created_at: string;
-  last_login?: string;
-  api_keys_count: number;
-}
-
-interface APIKey {
-  id: number;
-  key_name: string;
-  key_prefix: string;
-  is_active: boolean;
-  usage_count: number;
-  created_at: string;
-  last_used?: string;
-}
+const { Title, Text } = Typography;
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -53,8 +33,13 @@ const UserManagement: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
-  const [selectedUserKeys, setSelectedUserKeys] = useState<APIKey[]>([]);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [selectedUserKeys, setSelectedUserKeys] = useState<APIKeyType[]>([]);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
   const [form] = Form.useForm();
+  const [apiKeyForm] = Form.useForm();
+  const [newApiKey, setNewApiKey] = useState<string | null>(null);
+  const [apiKeyModalVisible, setApiKeyModalVisible] = useState(false);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [searchText, setSearchText] = useState('');
 
@@ -71,24 +56,15 @@ const UserManagement: React.FC = () => {
         search: searchText || undefined,
       };
       const apiUsers = await usersAPI.getAllUsers(params.skip, params.limit);
-      const enriched: User[] = await Promise.all(apiUsers.map(async (u) => {
+      const enriched: User[] = await Promise.all(apiUsers.map(async (u: User) => {
         let apiKeysCount = 0;
         try {
           const keys = await usersAPI.getUserAPIKeys(u.id);
           apiKeysCount = keys.length;
         } catch (e) {
-          console.error('获取API密钥失败', e);
+          // ignore if fails
         }
-        return {
-          id: u.id,
-          username: u.username,
-          email: u.email,
-          is_active: u.is_active,
-          is_superuser: u.is_superuser,
-          created_at: u.created_at,
-          last_login: u.last_login,
-          api_keys_count: apiKeysCount,
-        } as User;
+        return { ...u, updated_at: u.updated_at, api_keys_count: apiKeysCount };
       }));
       setUsers(enriched);
       setPagination((prev) => ({ ...prev, total: apiUsers.length }));
@@ -144,23 +120,47 @@ const UserManagement: React.FC = () => {
   };
 
   const handleViewAPIKeys = async (user: User) => {
+    setSelectedUser(user);
+    setApiKeysVisible(true);
+    setApiKeyLoading(true);
     try {
-      setLoading(true);
       const keys = await usersAPI.getUserAPIKeys(user.id);
-      setSelectedUserKeys(keys.map(k => ({
-        id: k.id,
-        key_name: k.name,
-        key_prefix: k.key_hash.substring(0, 6),
-        is_active: k.is_active,
-        usage_count: 0,
-        created_at: k.created_at,
-        last_used: k.last_used,
-      })));
-      setApiKeysVisible(true);
+      setSelectedUserKeys(keys || []);
     } catch (error) {
-      message.error('获取API密钥失败');
+      message.error('加载API密钥失败');
     } finally {
-      setLoading(false);
+      setApiKeyLoading(false);
+    }
+  };
+
+  const handleCreateApiKey = async (values: { name: string }) => {
+    if (!selectedUser) return;
+    setApiKeyLoading(true);
+    try {
+      const result = await usersAPI.createAPIKey(selectedUser.id, values.name);
+      message.success('API密钥创建成功');
+      setNewApiKey(result.key); // The raw key is in result.key
+      setApiKeyModalVisible(true);
+      await handleViewAPIKeys(selectedUser); // Reload list
+    } catch (error) {
+      message.error('创建API密钥失败');
+    } finally {
+      setApiKeyLoading(false);
+      apiKeyForm.resetFields();
+    }
+  };
+
+  const handleDeleteApiKey = async (apiKeyId: number) => {
+    if (!selectedUser) return;
+    setApiKeyLoading(true);
+    try {
+      await usersAPI.deleteAPIKey(selectedUser.id, apiKeyId);
+      message.success('API密钥删除成功');
+      await handleViewAPIKeys(selectedUser); // Reload list
+    } catch (error) {
+      message.error('删除API密钥失败');
+    } finally {
+      setApiKeyLoading(false);
     }
   };
 
@@ -255,8 +255,8 @@ const UserManagement: React.FC = () => {
   const apiKeyColumns = [
     {
       title: '密钥名称',
-      dataIndex: 'key_name',
-      key: 'key_name',
+      dataIndex: 'name',
+      key: 'name',
     },
     {
       title: '密钥前缀',
@@ -285,6 +285,22 @@ const UserManagement: React.FC = () => {
       key: 'last_used',
       render: (date?: string) => 
         date ? new Date(date).toLocaleDateString('zh-CN') : '从未使用',
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_: any, record: APIKeyType) => (
+        <Popconfirm
+          title="确定要删除这个API密钥吗？"
+          onConfirm={() => handleDeleteApiKey(record.id)}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Button type="link" danger icon={<DeleteOutlined />}>
+            删除
+          </Button>
+        </Popconfirm>
+      ),
     },
   ];
 
@@ -392,20 +408,53 @@ const UserManagement: React.FC = () => {
 
       {/* API密钥抽屉 */}
       <Drawer
-        title="API密钥管理"
+        title={`${selectedUser?.username} 的 API密钥管理`}
         placement="right"
-        width={800}
+        width={600}
         open={apiKeysVisible}
         onClose={() => setApiKeysVisible(false)}
       >
+        <Form form={apiKeyForm} onFinish={handleCreateApiKey} layout="inline" style={{ marginBottom: 16 }}>
+          <Form.Item
+            name="name"
+            rules={[{ required: true, message: '请输入密钥名称' }]}
+            style={{ flex: 1 }}
+          >
+            <Input placeholder="为新密钥命名" />
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" loading={apiKeyLoading}>
+              创建新密钥
+            </Button>
+          </Form.Item>
+        </Form>
         <Table
           columns={apiKeyColumns}
           dataSource={selectedUserKeys}
           rowKey="id"
+          loading={apiKeyLoading}
           size="small"
           pagination={false}
         />
       </Drawer>
+
+      {/* 显示新创建的API Key Modal */}
+      <Modal
+        title="API密钥创建成功"
+        open={apiKeyModalVisible}
+        onOk={() => setApiKeyModalVisible(false)}
+        onCancel={() => setApiKeyModalVisible(false)}
+        footer={[
+          <Button key="ok" type="primary" onClick={() => setApiKeyModalVisible(false)}>
+            好的
+          </Button>,
+        ]}
+      >
+        <p>请复制并妥善保存您的新API密钥，此密钥仅显示一次：</p>
+        <Text code copyable style={{ fontSize: '16px' }}>
+          {newApiKey}
+        </Text>
+      </Modal>
     </div>
   );
 };

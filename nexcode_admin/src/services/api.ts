@@ -292,12 +292,18 @@ export const commitsAPI = {
     user_activity: Array<{ username: string; commit_count: number }>;
     repository_activity: Array<{ repository_name: string; commit_count: number }>;
     model_usage: Array<{ model_name: string; usage_count: number }>;
+    commit_style_distribution: Array<{ style: string; count: number }>;
     period_days: number;
     start_date: string;
     end_date: string;
-  }> => {
-    const response = await apiClient.get(`/v1/admin/commits/analytics?days=${days}`);
-    return response.data;
+  } | null> => {
+    try {
+      const response = await apiClient.get(`/v1/admin/commits/analytics?days=${days}`);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch commit analytics:', error);
+      return null;
+    }
   },
 
   // 搜索提交记录（保持原有的用户接口）
@@ -354,7 +360,17 @@ export const systemAPI = {
   // 获取系统统计
   getSystemStats: async (): Promise<SystemStats> => {
     const response = await apiClient.get('/v1/admin/stats');
-    return response.data;
+    const data = response.data;
+    
+    // 将后端的嵌套结构转换为前端期望的平面结构
+    return {
+      total_users: data.database?.total_users || 0,
+      active_users: data.database?.active_users || 0,
+      total_commits: data.database?.total_commits || 0,
+      commits_today: data.database?.today_commits || 0,
+      avg_rating: data.avg_rating || 0,
+      api_calls_today: data.api_calls_today || 0
+    };
   },
 
   // 获取系统健康状态

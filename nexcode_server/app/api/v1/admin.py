@@ -487,11 +487,35 @@ async def get_commits_analytics(
                 "usage_count": row.usage_count
             })
         
+        # 新增：提交风格分布
+        commit_style_stmt = select(
+            CommitInfo.commit_style,
+            func.count(CommitInfo.id).label('count')
+        ).where(
+            and_(
+                CommitInfo.created_at >= start_date,
+                CommitInfo.commit_style.isnot(None)
+            )
+        ).group_by(
+            CommitInfo.commit_style
+        ).order_by(
+            func.count(CommitInfo.id).desc()
+        )
+        
+        style_result = await db.execute(commit_style_stmt)
+        commit_style_distribution = []
+        for row in style_result:
+            commit_style_distribution.append({
+                "style": row.commit_style,
+                "count": row.count
+            })
+
         return {
             "daily_trends": daily_trends,
             "user_activity": user_activity,
             "repository_activity": repo_activity,
             "model_usage": model_usage,
+            "commit_style_distribution": commit_style_distribution,
             "period_days": days,
             "start_date": start_date.isoformat(),
             "end_date": datetime.now().isoformat()

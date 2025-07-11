@@ -31,16 +31,59 @@ import {
   Bar,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  Legend
 } from 'recharts';
 import { systemAPI, commitsAPI, type SystemStats } from '../services/api';
 
+// 错误边界组件
+class ChartErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Chart error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <Typography.Text type="secondary">图表加载失败</Typography.Text>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 const { Title, Text } = Typography;
 
-interface DashboardStats extends SystemStats {
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+interface DashboardStats extends Omit<SystemStats, 'avg_rating'> {
   cpu_usage?: number;
   memory_usage?: number;
   disk_usage?: number;
+  avg_rating?: number;
+}
+
+interface CommitAnalytics {
+  daily_trends: Array<{ date: string; commit_count: number }>;
+  user_activity: Array<{ username: string; commit_count: number }>;
+  repository_activity: Array<{ repository_name: string; commit_count: number }>;
+  model_usage: Array<{ model_name: string; usage_count: number }>;
+  commit_style_distribution: Array<{ style: string; count: number }>;
 }
 
 interface RecentActivity {
@@ -75,12 +118,11 @@ interface CommitRecord {
 
 const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [commitAnalytics, setCommitAnalytics] = useState<CommitAnalytics | null>(null);
   const [, setRecentActivities] = useState<RecentActivity[]>([]);
   const [recentCommits, setRecentCommits] = useState<CommitRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [commitTrendData, setCommitTrendData] = useState<any[]>([]);
-  const [styleDistribution, setStyleDistribution] = useState<any[]>([]);
 
   const fetchDashboardData = async () => {
     try {
@@ -88,11 +130,22 @@ const Dashboard: React.FC = () => {
       setError(null);
 
       // 并行获取系统统计和最近提交
-      const [systemStats, commitsResponse, analytics] = await Promise.all([
+      const [systemStats, commitsResponse, analyticsData] = await Promise.all([
         systemAPI.getSystemStats(),
-        commitsAPI.getAllCommits({ skip: 0, limit: 100 }).catch(() => ({ commits: [], total: 0, skip: 0, limit: 100 })), // 获取最近100条提交用于统计
-        commitsAPI.getCommitAnalytics(7).catch(() => ({ daily_trends: [] }))
+        commitsAPI.getAllCommits({ skip: 0, limit: 10 }).catch(() => ({ commits: [], total: 0, skip: 0, limit: 10 })),
+        commitsAPI.getCommitAnalytics(30).catch(() => null)
       ]);
+
+      // 验证和清理分析数据
+      const cleanedAnalytics = analyticsData ? {
+        ...analyticsData,
+        daily_trends: (analyticsData.daily_trends || []).filter(item => 
+          item && typeof item.date === 'string' && typeof item.commit_count === 'number'
+        ),
+        commit_style_distribution: (analyticsData.commit_style_distribution || []).filter(item => 
+          item && typeof item.style === 'string' && typeof item.count === 'number' && item.count > 0
+        )
+      } : null;
 
       // 尝试获取健康检查数据（可选）
       let healthData: any = null;
@@ -108,10 +161,12 @@ const Dashboard: React.FC = () => {
         ...systemStats,
         cpu_usage: healthData?.cpu_usage,
         memory_usage: healthData?.memory_usage,
-        disk_usage: healthData?.disk_usage
+        disk_usage: healthData?.disk_usage,
+        avg_rating: healthData?.avg_rating
       };
 
       setStats(combinedStats);
+      setCommitAnalytics(cleanedAnalytics);
       setRecentActivities([
         {
           id: '1',
@@ -142,31 +197,13 @@ const Dashboard: React.FC = () => {
           status: 'success',
         },
       ]);
-      // 处理提交趋势数据
-      const dayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      const trend = (analytics.daily_trends || []).map(({ date, commit_count }) => {
-        const d = new Date(date);
-        return { name: dayNames[d.getDay()], commits: commit_count, rating: 0 };
-      });
-      setCommitTrendData(trend);
 
-      // 处理提交风格分布
-      const styleCounts: Record<string, number> = {};
-      (commitsResponse.commits || []).forEach(c => {
-        if (c.commit_style) {
-          styleCounts[c.commit_style] = (styleCounts[c.commit_style] || 0) + 1;
-        }
-      });
-      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#83a6ed'];
-      const styleDist = Object.entries(styleCounts).map(([name, value], idx) => ({
-        name,
-        value,
-        color: colors[idx % colors.length],
+      // 处理最近提交
+      const formattedCommits = (commitsResponse.commits || []).map((commit) => ({
+        ...commit,
+        created_at: new Date(commit.created_at).toLocaleString('zh-CN'),
       }));
-      setStyleDistribution(styleDist);
-
-      // 仅展示最近10条提交
-      setRecentCommits((commitsResponse.commits || []).slice(0, 10));
+      setRecentCommits(formattedCommits);
     } catch (err: any) {
       console.error('获取Dashboard数据失败:', err);
       setError(err.message || '获取数据失败');
@@ -372,43 +409,63 @@ const Dashboard: React.FC = () => {
 
       {/* 图表区域 */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={16}>
-          <Card title="提交趋势" style={{ height: 400 }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={commitTrendData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
-                <Tooltip />
-                <Bar yAxisId="left" dataKey="commits" fill="#8884d8" name="提交数量" />
-                <Line yAxisId="right" type="monotone" dataKey="rating" stroke="#82ca9d" name="平均评分" />
-              </LineChart>
-            </ResponsiveContainer>
+        <Col span={12}>
+          <Card title="最近30天提交趋势">
+            <ChartErrorBoundary>
+              {commitAnalytics?.daily_trends && commitAnalytics.daily_trends.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={commitAnalytics.daily_trends}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(tick) => {
+                        try {
+                          return new Date(tick).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+                        } catch {
+                          return tick;
+                        }
+                      }}
+                    />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Line type="monotone" dataKey="commit_count" name="提交数" stroke="#8884d8" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '50px' }}>
+                  <Text type="secondary">暂无数据</Text>
+                </div>
+              )}
+            </ChartErrorBoundary>
           </Card>
         </Col>
-        <Col xs={24} lg={8}>
-          <Card title="提交风格分布" style={{ height: 400 }}>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={styleDistribution}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }: { name: string; percent?: number }) => 
-                    `${name}: ${((percent || 0) * 100).toFixed(0)}%`
-                  }
-                >
-                  {styleDistribution.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
+        <Col span={12}>
+          <Card title="提交风格分布">
+            <ChartErrorBoundary>
+              {commitAnalytics?.commit_style_distribution && commitAnalytics.commit_style_distribution.length > 0 ? (
+                <div>
+                  {commitAnalytics.commit_style_distribution.map((item, index) => (
+                    <div key={item.style} style={{ marginBottom: '8px', display: 'flex', alignItems: 'center' }}>
+                      <div 
+                        style={{ 
+                          width: '12px', 
+                          height: '12px', 
+                          backgroundColor: COLORS[index % COLORS.length],
+                          marginRight: '8px',
+                          borderRadius: '50%'
+                        }}
+                      />
+                      <Text>{item.style}: {item.count}</Text>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '50px' }}>
+                  <Text type="secondary">暂无数据</Text>
+                </div>
+              )}
+            </ChartErrorBoundary>
           </Card>
         </Col>
       </Row>
