@@ -31,7 +31,6 @@ def load_prompt(prompt_name: str, context: Dict[str, Any] = None) -> Dict[str, A
     if use_zh_optimized:
         zh_prompt_path = PROMPT_DIR / f"{prompt_name}_zh.toml"
         if zh_prompt_path.exists():
-            print(f"Using Chinese-optimized prompt: {prompt_name}_zh.toml")
             return toml.load(zh_prompt_path)
     
     # 使用默认版本
@@ -73,9 +72,9 @@ def get_rendered_prompts(task_type: str, context: Dict[str, Any]) -> tuple[str, 
         tuple: (system_prompt, user_prompt)
     """
     prompt_config = load_prompt(task_type, context)
-    
-    system_content = prompt_config.get("system", {}).get("content", "")
-    user_template = prompt_config.get("user", {}).get("template", "")
+    print(f"Prompt config: {prompt_config}")
+    system_content = prompt_config.get(task_type, {}).get("system", "")
+    user_template = prompt_config.get(task_type, {}).get("content", "")
     
     user_content = render_prompt(user_template, context)
     

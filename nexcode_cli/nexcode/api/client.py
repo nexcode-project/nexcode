@@ -147,6 +147,7 @@ class NexCodeAPIClient:
             'current_branch': current_branch,
             'repository_type': repository_type
         }
+        print(data)
         return self._make_request('POST', ENDPOINTS['push_strategy'], data)
     
     def review_code(self, diff: str, check_type: str = 'general') -> Dict[str, Any]:

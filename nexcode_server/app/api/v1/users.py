@@ -244,7 +244,7 @@ async def deactivate_user(
     user.is_active = False
     await db.commit()
     
-    return {"message": f"User {user.username} deactivated successfully"}
+    return {"message": f"User {user.username} deactivated successfully"} 
 
 # 新增：管理员创建用户
 @router.post("/admin/create", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

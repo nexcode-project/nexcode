@@ -509,7 +509,7 @@ async def get_commits_analytics(
                 "style": row.commit_style,
                 "count": row.count
             })
-
+        
         return {
             "daily_trends": daily_trends,
             "user_activity": user_activity,

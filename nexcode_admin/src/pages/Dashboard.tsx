@@ -28,10 +28,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
   Legend
 } from 'recharts';
 import { systemAPI, commitsAPI, type SystemStats } from '../services/api';
@@ -46,7 +42,7 @@ class ChartErrorBoundary extends React.Component<
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
 

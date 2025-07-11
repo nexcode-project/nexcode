@@ -2,10 +2,9 @@
 Token计数模块
 支持OpenAI GPT模型和Qwen3模型的token统计
 """
-
-import tiktoken
 from typing import Optional, Dict, Any
 import logging
+from transformers import AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +21,14 @@ class TokenCounter:
         
         try:
             # 尝试直接获取模型的编码器
-            encoder = tiktoken.encoding_for_model(model_name)
+            encoder = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
             self._encoders[model_name] = encoder
             return encoder
         except KeyError:
             # 如果模型不存在，使用通用编码器
             logger.warning(f"Model {model_name} not found in tiktoken, using cl100k_base")
-            encoder = tiktoken.get_encoding("cl100k_base")
+            encoder = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
+            
             self._encoders[model_name] = encoder
             return encoder
     
@@ -53,7 +53,7 @@ class TokenCounter:
             
             # 处理其他OpenAI兼容模型
             encoder = self.get_encoder(model_name)
-            return len(encoder.encode(text))
+            return len(encoder.tokenize(text))
         except Exception as e:
             logger.error(f"Error counting tokens for model {model_name}: {e}")
             # 回退到简单的字符计数估算
@@ -65,8 +65,8 @@ class TokenCounter:
         使用cl100k_base编码器作为近似
         """
         try:
-            encoder = tiktoken.get_encoding("cl100k_base")
-            return len(encoder.encode(text))
+            encoder = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")
+            return len(encoder.tokenize(text))
         except Exception as e:
             logger.error(f"Error counting Qwen tokens: {e}")
             # 中文文本大约每个字符0.7个token，英文文本每个字符0.25个token

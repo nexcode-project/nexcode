@@ -19,7 +19,8 @@ async def analyze_push_strategy(request: PushStrategyRequest):
             "repository_type": request.repository_type,
             "current_branch": request.current_branch
         }
-        
+        # 打印llm_data
+        print(llm_data)
         # 调用LLM，传递CLI的API配置
         response_text = get_llm_solution(
             task_type="push_strategy",

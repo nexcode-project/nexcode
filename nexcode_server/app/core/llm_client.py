@@ -162,13 +162,9 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
         print(f"\n=== LLM DEBUG ({task_type}) ===")
         print(f"Data keys: {list(data.keys())}")
         config = load_config()
+
         system_content, user_content = get_rendered_prompts(task_type, data)
-        
-        print(f"System prompt length: {len(system_content)}")
-        print(f"User prompt length: {len(user_content)}")
-        print(f"User prompt preview (first 300 chars):")
-        print(user_content[:300])
-        
+
         # Token统计
         try:
             final_model = model_name or settings.OPENAI_MODEL
