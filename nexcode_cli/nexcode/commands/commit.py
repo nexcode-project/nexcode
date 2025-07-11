@@ -118,6 +118,8 @@ def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs, de
                 return
             
             if click.confirm("Do you want to proceed with this commit?", default=True):
+                # 确保提交消息UTF-8编码
+                commit_message = commit_message.encode('utf-8').decode('utf-8')
                 result = run_git_command_with_ai(['git', 'commit', '-m', commit_message])
                 if result:
                     click.echo("✓ Successfully committed.")
@@ -252,8 +254,12 @@ def commit(message, style, auto, debug):
         
         # 执行提交
         try:
-            # 提交
-            subprocess.run(['git', 'commit', '-m', final_message], check=True)
+            # 确保提交消息是UTF-8编码
+            final_message = final_message.encode('utf-8').decode('utf-8')
+            
+            # 提交 - 使用更安全的方式传递消息
+            subprocess.run(['git', 'commit', '-m', final_message], 
+                         check=True, encoding='utf-8')
             
             click.echo(f"✅ 代码已成功提交!")
             click.echo(f"📝 提交消息: {final_message}")

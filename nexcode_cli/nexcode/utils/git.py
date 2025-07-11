@@ -108,7 +108,8 @@ def run_git_command(command, dry_run=False, ai_helper_func=None):
             command,
             capture_output=True,
             text=True,
-            check=True
+            check=True,
+            encoding='utf-8'
         )
         return result
     except FileNotFoundError:

@@ -418,7 +418,10 @@ def push(branch, message, auto_commit, dry_run, debug):
             
             # 执行提交
             try:
-                subprocess.run(['git', 'commit', '-m', final_message], check=True)
+                # 确保提交消息是UTF-8编码
+                final_message = final_message.encode('utf-8').decode('utf-8')
+                subprocess.run(['git', 'commit', '-m', final_message], 
+                             check=True, encoding='utf-8')
                 click.echo(f"✅ 代码已提交: {final_message}")
                 
                 # 保存Commit信息到服务器
