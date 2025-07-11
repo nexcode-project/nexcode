@@ -28,20 +28,23 @@ DEFAULT_CONFIG = {
     },
     "model": {
         # The model to use for generating text.
-        "name": "",
+        # Optimized default: gpt-4o-mini for better code understanding
+        "name": "gpt-4o-mini",
         # Temperature for commit message generation (0.0 to 1.0).
-        # Higher values mean more creative, lower values mean more deterministic.
-        "commit_temperature": 0.7,
+        # Lower values for higher accuracy and consistency
+        "commit_temperature": 0.1,
         # Temperature for solution generation.
-        "solution_temperature": 0.5,
-        "max_tokens_commit": 60,
-        "max_tokens_solution": 512
+        "solution_temperature": 0.1,
+        # Increased token limits for better context handling
+        "max_tokens_commit": 100,
+        "max_tokens_solution": 2048
     },
     "commit": {
         # Default commit message style: conventional, semantic, simple, emoji
         "style": "conventional",
         # Whether to run bug analysis by default before committing
-        "check_bugs_by_default": False
+        # Enabled by default for better code quality
+        "check_bugs_by_default": True
     },
     "repositories": {
         # Repository-specific configurations
@@ -55,7 +58,7 @@ DEFAULT_CONFIG = {
 
 # Default local configuration template with detailed comments
 DEFAULT_LOCAL_CONFIG_TEMPLATE = """# Nexcode Local Repository Configuration
-# 本地仓库配置文件 - 用于设置特定仓库的推送和提交行为
+# 本地仓库配置文件 - 基于优化的默认配置
 # 此配置会覆盖全局配置设置
 # 
 # 配置完成后，使用以下命令测试推送:
@@ -72,24 +75,27 @@ repository:
   # 目标分支名称 (用于某些推送模板)
   target_branch: main
   
-  # 推送命令模板
+  # 推送命令模板 - 标准GitHub/GitLab推送
   # 可用变量: {remote}, {branch}, {target_branch}
-  # 
-  # 常用模板示例:
-  # GitHub/GitLab/Gitee: "git push {remote} {branch}"
-  # Gerrit 代码评审:    "git push {remote} HEAD:refs/for/{target_branch}"
-  # 强制推送:           "git push --force {remote} {branch}"
-  # 推送并设置上游:      "git push --set-upstream {remote} {branch}"
   push_command: "git push {remote} {branch}"
 
 commit:
-  # 提交消息风格覆盖 (null 表示使用全局设置)
+  # 提交消息风格 - 使用conventional commits提高规范性
   # 可选值: conventional, semantic, simple, emoji, null
-  style: null
+  style: conventional
   
-  # 是否默认启用 bug 检查 (null 表示使用全局设置)
-  # 可选值: true, false, null
-  check_bugs_by_default: null
+  # 默认启用代码质量检查 - 提高代码质量
+  # 可选值: true, false, null  
+  check_bugs_by_default: true
+
+# 模型配置优化 (可选覆盖)
+model:
+  # 使用优化的模型和参数
+  name: "gpt-4o-mini"
+  commit_temperature: 0.1  # 更低温度提高准确性
+  solution_temperature: 0.1
+  max_tokens_commit: 100
+  max_tokens_solution: 2048
 
 # 示例配置:
 #

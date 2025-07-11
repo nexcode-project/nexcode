@@ -183,10 +183,28 @@ def get_llm_solution(task_type: str, data: Dict[str, Any],
         
         print("===========================\n")
         
-        # 根据任务类型决定是否使用JSON格式
+        # 根据任务类型决定是否使用JSON格式和调整温度
         use_json = task_type not in ["commit_message"]
         
-        result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name, use_json)
+        # 为不同任务类型使用不同的温度设置
+        if task_type == "commit_message":
+            # 提交消息需要更高的确定性
+            temperature = 0.1
+        else:
+            # 其他任务使用默认温度
+            temperature = None
+        
+        if temperature is not None:
+            result = call_llm_api_with_params(
+                system_content=system_content,
+                user_content=user_content,
+                api_key=api_key,
+                api_base_url=api_base_url,
+                model_name=model_name,
+                temperature=temperature
+            )
+        else:
+            result = call_llm_api(system_content, user_content, api_key, api_base_url, model_name, use_json)
         
         print(f"LLM response: {result}")
         print("=== END LLM DEBUG ===\n")

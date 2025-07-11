@@ -9,28 +9,46 @@ from app.models.user_schemas import CommitInfoCreate
 
 router = APIRouter()
 
-# 配置diff长度限制
-MAX_DIFF_LENGTH = 32648
+# 配置diff长度限制 - 增加到更大的值以保持更多上下文
+MAX_DIFF_LENGTH = 65536  # 64KB，足够包含大部分代码变更
 
 def truncate_diff(diff: str) -> str:
     """
-    截取diff内容到指定长度，确保不破坏diff结构
+    智能截取diff内容，优先保持重要的代码变更信息
     """
     if not diff or len(diff) <= MAX_DIFF_LENGTH:
         return diff
     
-    # 截取到最大长度
-    truncated = diff[:MAX_DIFF_LENGTH]
+    lines = diff.split('\n')
+    important_lines = []
+    current_length = 0
     
-    # 尝试在行边界截取，避免破坏diff结构
-    last_newline = truncated.rfind('\n')
-    if last_newline > MAX_DIFF_LENGTH * 0.8:  # 如果最后一个换行符在80%位置之后
-        truncated = truncated[:last_newline]
+    # 优先保留重要的diff行
+    for line in lines:
+        line_with_newline = line + '\n'
+        
+        # 重要行：文件头、hunk头、实际的代码变更
+        is_important = (
+            line.startswith('diff --git') or 
+            line.startswith('index ') or
+            line.startswith('+++') or line.startswith('---') or
+            line.startswith('@@') or
+            line.startswith('+') or line.startswith('-') or
+            line.strip() == ''  # 保留空行以维持结构
+        )
+        
+        if is_important or current_length + len(line_with_newline) <= MAX_DIFF_LENGTH:
+            important_lines.append(line)
+            current_length += len(line_with_newline)
+        else:
+            break
     
-    # 添加截取提示
-    truncated += "\n\n[... diff truncated to fit size limit ...]"
+    # 如果截断了，添加提示
+    if len(important_lines) < len(lines):
+        important_lines.append('')
+        important_lines.append('[... diff truncated - showing most relevant changes ...]')
     
-    return truncated
+    return '\n'.join(important_lines)
 
 @router.post("/commit-message", response_model=CommitMessageResponse)
 async def generate_commit_message(

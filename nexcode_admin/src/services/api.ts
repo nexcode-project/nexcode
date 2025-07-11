@@ -362,21 +362,35 @@ export const systemAPI = {
     const response = await apiClient.get('/v1/admin/stats');
     const data = response.data;
     
-    // 将后端的嵌套结构转换为前端期望的平面结构
+    // 处理后端可能的数据结构（扁平化或嵌套）
     return {
-      total_users: data.database?.total_users || 0,
-      active_users: data.database?.active_users || 0,
-      total_commits: data.database?.total_commits || 0,
-      commits_today: data.database?.today_commits || 0,
+      total_users: data.total_users || data.database?.total_users || 0,
+      active_users: data.active_users || data.database?.active_users || 0,
+      total_commits: data.total_commits || data.database?.total_commits || 0,
+      commits_today: data.today_commits || data.commits_today || data.database?.today_commits || 0,
       avg_rating: data.avg_rating || 0,
       api_calls_today: data.api_calls_today || 0
     };
   },
 
   // 获取系统健康状态
-  getHealthCheck: async (): Promise<{ status: string; version: string; services: Record<string, string> }> => {
-    const response = await apiClient.get('/health');
-    return response.data;
+  getHealthCheck: async (): Promise<{ 
+    status: string; 
+    version?: string; 
+    services?: Record<string, string>;
+    cpu_usage?: number;
+    memory_usage?: number;
+    disk_usage?: number;
+  }> => {
+    try {
+      // 首先尝试获取系统健康状态
+      const response = await apiClient.get('/v1/admin/system/health');
+      return response.data;
+    } catch (error) {
+      // 如果系统健康状态API不可用，尝试基础健康检查
+      const response = await apiClient.get('/health');
+      return response.data;
+    }
   },
 
   // 获取系统设置
@@ -413,7 +427,7 @@ export const systemAPI = {
 // API监控
 export const monitoringAPI = {
   // 获取API调用统计
-  getAPIStats: async (timeRange = '24h'): Promise<{
+  getApiMonitoring: async (timeRange = '24h'): Promise<{
     total_calls: number;
     successful_calls: number;
     failed_calls: number;
@@ -426,6 +440,19 @@ export const monitoringAPI = {
     }>;
   }> => {
     const response = await apiClient.get(`/v1/admin/monitoring/api?time_range=${timeRange}`);
+    return response.data;
+  },
+
+  // 获取系统健康状态
+  getSystemHealth: async (): Promise<{
+    status: string;
+    cpu_usage: number;
+    memory_usage: number;
+    disk_usage: number;
+    uptime: number;
+    timestamp: string;
+  }> => {
+    const response = await apiClient.get('/v1/admin/system/health');
     return response.data;
   },
 
