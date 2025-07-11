@@ -2,6 +2,7 @@ import subprocess
 import click
 import fnmatch
 import os
+import re
 from pathlib import Path
 
 
@@ -232,3 +233,43 @@ def smart_git_add(dry_run=False):
     except subprocess.CalledProcessError as e:
         click.echo(f"Error adding files: {e}")
         return False 
+
+
+def get_repository_info():
+    """
+    获取当前Git仓库的信息
+    
+    Returns:
+        tuple: (repository_url, repository_name) 或 (None, None) 如果获取失败
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'config', '--get', 'remote.origin.url'], 
+            capture_output=True, text=True, check=True
+        )
+        repository_url = result.stdout.strip()
+        
+        # 提取仓库名
+        repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
+        repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
+        
+        return repository_url, repository_name
+    except subprocess.CalledProcessError:
+        return None, None
+
+
+def get_commit_hash():
+    """
+    获取最新的commit hash
+    
+    Returns:
+        str: commit hash 或 None 如果获取失败
+    """
+    try:
+        result = subprocess.run(
+            ['git', 'rev-parse', 'HEAD'], 
+            capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        return None 

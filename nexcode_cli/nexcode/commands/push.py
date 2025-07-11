@@ -1,10 +1,12 @@
 import os
-import click
 import shlex
 import subprocess
-from ..config import config as app_config
-from ..utils.git import get_git_diff, smart_git_add, ensure_git_root, get_current_branch, get_remote_branches
+
+import click
+
 from ..api.client import api_client
+from ..config import config as app_config
+from ..utils.git import get_git_diff, smart_git_add, ensure_git_root, get_current_branch, get_remote_branches, get_repository_info, get_commit_hash
 
 
 def run_git_command_with_ai(command, dry_run=False):
@@ -420,23 +422,8 @@ def push(branch, message, auto_commit, dry_run, debug):
                 click.echo(f"✅ 代码已提交: {final_message}")
                 
                 # 保存Commit信息到服务器
-                try:
-                    # 获取最新commit hash
-                    hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
-                    commit_hash = hash_result.stdout.strip()
-                except subprocess.CalledProcessError:
-                    commit_hash = None
-
-                # 获取仓库信息
-                try:
-                    remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], capture_output=True, text=True, check=True)
-                    repository_url = remote_url_result.stdout.strip()
-                    import re, os
-                    repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
-                    repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
-                except subprocess.CalledProcessError:
-                    repository_url = None
-                    repository_name = None
+                commit_hash = get_commit_hash()
+                repository_url, repository_name = get_repository_info()
 
                 commit_payload = {
                     'repository_url': repository_url,

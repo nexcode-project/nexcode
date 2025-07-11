@@ -1,9 +1,11 @@
 import os
-import click
 import subprocess
-from ..config import config as app_config
-from ..utils.git import get_git_diff, ensure_git_root, get_current_branch
+
+import click
+
 from ..api.client import api_client
+from ..config import config as app_config
+from ..utils.git import get_git_diff, ensure_git_root, get_current_branch, get_repository_info, get_commit_hash
 
 
 
@@ -120,25 +122,10 @@ def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs, de
                 if result:
                     click.echo("✓ Successfully committed.")
 
-                    # 获取最新commit hash
-                    try:
-                        hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
-                        commit_hash = hash_result.stdout.strip()
-                    except subprocess.CalledProcessError:
-                        commit_hash = None
-
-                    # 获取当前分支和远程仓库信息
+                    # 获取Git仓库信息
+                    commit_hash = get_commit_hash()
                     branch_name = get_current_branch() or ''
-                    try:
-                        remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], capture_output=True, text=True, check=True)
-                        repository_url = remote_url_result.stdout.strip()
-                        # 提取仓库名
-                        import re, os
-                        repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
-                        repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
-                    except subprocess.CalledProcessError:
-                        repository_url = None
-                        repository_name = None
+                    repository_url, repository_name = get_repository_info()
 
                     # 调用后端API保存commit信息
                     commit_payload = {
@@ -271,25 +258,10 @@ def commit(message, style, auto, debug):
             click.echo(f"✅ 代码已成功提交!")
             click.echo(f"📝 提交消息: {final_message}")
             
-            # 获取最新commit hash
-            try:
-                hash_result = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True, check=True)
-                commit_hash = hash_result.stdout.strip()
-            except subprocess.CalledProcessError:
-                commit_hash = None
-
-            # 获取当前分支和远程仓库信息
+            # 获取Git仓库信息
+            commit_hash = get_commit_hash()
             branch_name = get_current_branch() or ''
-            try:
-                remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], capture_output=True, text=True, check=True)
-                repository_url = remote_url_result.stdout.strip()
-                # 提取仓库名
-                import re, os
-                repo_name_match = re.search(r'([^/]+?)(?:\.git)?$', repository_url)
-                repository_name = repo_name_match.group(1) if repo_name_match else os.path.basename(repository_url)
-            except subprocess.CalledProcessError:
-                repository_url = None
-                repository_name = None
+            repository_url, repository_name = get_repository_info()
 
             # 调用后端API保存commit信息
             commit_payload = {

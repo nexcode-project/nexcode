@@ -1,6 +1,8 @@
-from nexcode.config import load_config
-import openai
 from typing import Dict, Any, Optional, Union, List
+
+import openai
+from nexcode.config import load_config
+
 from .config import settings
 from .prompt_loader import get_rendered_prompts
 from .token_counter import count_tokens, count_messages_tokens, estimate_total_tokens

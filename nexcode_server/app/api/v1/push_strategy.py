@@ -60,7 +60,7 @@ async def analyze_push_strategy(request: PushStrategyRequest):
         )
 
 
-def extract_clean_commit_message(text):
+def extract_clean_commit_message(text: str) -> str:
     """从LLM响应中提取干净的提交消息"""
     if not text:
         return "chore: update code"
@@ -73,7 +73,7 @@ def extract_clean_commit_message(text):
         parsed = json.loads(text)
         if isinstance(parsed, dict) and 'commit_message' in parsed:
             text = parsed['commit_message']
-    except:
+    except (json.JSONDecodeError, KeyError, TypeError):
         pass
     
     # 取第一行

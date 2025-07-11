@@ -3,8 +3,9 @@ API客户端模块
 统一管理所有后端API请求
 """
 
-import requests
 from typing import Dict, Any, Optional, List
+
+import requests
 
 from ..config import get_merged_config
 from .endpoints import ENDPOINTS

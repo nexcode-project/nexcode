@@ -1,7 +1,9 @@
-import click
+import os
 import subprocess
 import time
-import os
+
+import click
+
 from ..api.client import api_client
 from ..utils.git import get_git_diff, ensure_git_root
 

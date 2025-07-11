@@ -1,7 +1,7 @@
-import yaml
-from pathlib import Path
-import click
 import os
+import yaml
+import click
+from pathlib import Path
 
 # Define the path for the configuration file
 CONFIG_DIR = Path.home() / ".config" / "nexcode"

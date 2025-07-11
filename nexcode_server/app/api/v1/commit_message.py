@@ -109,7 +109,7 @@ async def generate_commit_message(
     request: CommitMessageRequest, 
     current_user: OptionalUser,
     db: DatabaseSession
-):
+) -> CommitMessageResponse:
     """
     生成提交消息，并记录到数据库
     """
