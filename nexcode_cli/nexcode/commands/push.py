@@ -76,7 +76,7 @@ def show_push_preview(target_branch, new_branch=None):
         click.echo(f"🚀 推送命令: git push --set-upstream origin {target_branch}")
 
 
-def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
+def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs, debug=False):
     """Implementation of the push command."""
     
     # 确保在Git根目录执行
@@ -137,6 +137,45 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
         # 3. Generate commit message
         used_style = style or app_config.get('commit', {}).get('style', 'conventional')
         click.echo(f"› Generating commit message with AI ({used_style} style)...")
+        
+        # Debug信息输出
+        if debug:
+            click.secho("\n🐛 DEBUG: LLM输入信息", fg="yellow", bold=True)
+            click.echo("=" * 60)
+            
+            # 显示基本配置
+            click.echo(f"提交风格: {used_style}")
+            click.echo(f"模型配置: {app_config.get('model', {})}")
+            click.echo(f"API服务器: {app_config.get('api_server', {})}")
+            
+            # 显示diff信息
+            click.echo(f"\nDiff长度: {len(diff)} 字符")
+            if len(diff) > 1000:
+                click.echo("Diff预览 (前500字符):")
+                click.echo(diff[:500])
+                click.echo(f"... (还有 {len(diff) - 500} 字符)")
+            else:
+                click.echo("完整Diff内容:")
+                click.echo(diff)
+            
+            # 显示上下文信息
+            try:
+                current_branch = get_current_branch()
+                remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], 
+                                                 capture_output=True, text=True, check=True)
+                repository_url = remote_url_result.stdout.strip()
+                
+                context_info = {
+                    'repository_url': repository_url,
+                    'branch_name': current_branch,
+                    'commit_style': used_style
+                }
+                click.echo(f"\n上下文信息: {context_info}")
+            except:
+                click.echo("\n上下文信息: 无法获取")
+            
+            click.echo("=" * 60)
+            click.echo()
         
         if not dry_run:
             # 使用服务端API生成提交消息
@@ -249,7 +288,8 @@ def handle_push_command(new_branch, dry_run, style, check_bugs, no_check_bugs):
 @click.option('--message', '-m', default=None, help='提交消息')
 @click.option('--auto-commit', is_flag=True, help='自动生成提交消息并提交')
 @click.option('--dry-run', is_flag=True, help='仅显示将要执行的操作，不实际执行')
-def push(branch, message, auto_commit, dry_run):
+@click.option('--debug', is_flag=True, help='显示详细的LLM输入调试信息')
+def push(branch, message, auto_commit, dry_run, debug):
     """智能推送代码"""
     
     try:
@@ -280,6 +320,47 @@ def push(branch, message, auto_commit, dry_run):
         click.echo(f"🚀 正在分析推送策略...")
         click.echo(f"当前分支: {current_branch}")
         click.echo(f"目标分支: {target_branch}")
+        
+        # Debug信息输出
+        if debug:
+            click.secho("\n🐛 DEBUG: LLM推送策略分析输入", fg="yellow", bold=True)
+            click.echo("=" * 60)
+            
+            # 显示基本配置
+            click.echo(f"模型配置: {app_config.get('model', {})}")
+            click.echo(f"API服务器: {app_config.get('api_server', {})}")
+            click.echo(f"当前分支: {current_branch}")
+            click.echo(f"目标分支: {target_branch}")
+            click.echo(f"仓库类型: github")
+            
+            # 显示diff信息
+            click.echo(f"\nDiff长度: {len(diff)} 字符")
+            if len(diff) > 1000:
+                click.echo("Diff预览 (前500字符):")
+                click.echo(diff[:500])
+                click.echo(f"... (还有 {len(diff) - 500} 字符)")
+            else:
+                click.echo("完整Diff内容:")
+                click.echo(diff)
+            
+            # 显示上下文信息
+            try:
+                remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], 
+                                                 capture_output=True, text=True, check=True)
+                repository_url = remote_url_result.stdout.strip()
+                
+                context_info = {
+                    'repository_url': repository_url,
+                    'current_branch': current_branch,
+                    'target_branch': target_branch,
+                    'repository_type': 'github'
+                }
+                click.echo(f"\n完整请求参数: {context_info}")
+            except:
+                click.echo("\n仓库信息: 无法获取")
+            
+            click.echo("=" * 60)
+            click.echo()
         
         # 调用API服务进行推送策略分析
         result = api_client.analyze_push_strategy(

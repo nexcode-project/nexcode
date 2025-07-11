@@ -17,7 +17,7 @@ def run_git_command_with_ai(command, dry_run=False):
     return run_git_command(command, dry_run=dry_run, ai_helper_func=ai_helper)
 
 
-def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs):
+def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs, debug=False):
     """Implementation of the commit command."""
     
     # 确保在Git根目录执行
@@ -135,7 +135,8 @@ def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs):
 @click.option('--style', default='conventional', 
               help='提交消息风格: conventional, simple, detailed')
 @click.option('--auto', is_flag=True, help='自动生成消息并提交')
-def commit(message, style, auto):
+@click.option('--debug', is_flag=True, help='显示详细的LLM输入调试信息')
+def commit(message, style, auto, debug):
     """智能生成提交消息并提交代码"""
     
     try:
@@ -160,6 +161,45 @@ def commit(message, style, auto):
         else:
             # 生成提交消息
             click.echo("🤖 正在生成智能提交消息...")
+            
+            # Debug信息输出
+            if debug:
+                click.secho("\n🐛 DEBUG: LLM提交消息生成输入", fg="yellow", bold=True)
+                click.echo("=" * 60)
+                
+                # 显示基本配置
+                click.echo(f"提交风格: {style}")
+                click.echo(f"模型配置: {app_config.get('model', {})}")
+                click.echo(f"API服务器: {app_config.get('api_server', {})}")
+                
+                # 显示diff信息
+                click.echo(f"\nDiff长度: {len(diff)} 字符")
+                if len(diff) > 1000:
+                    click.echo("Diff预览 (前500字符):")
+                    click.echo(diff[:500])
+                    click.echo(f"... (还有 {len(diff) - 500} 字符)")
+                else:
+                    click.echo("完整Diff内容:")
+                    click.echo(diff)
+                
+                # 显示上下文信息
+                try:
+                    current_branch = get_current_branch()
+                    remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], 
+                                                     capture_output=True, text=True, check=True)
+                    repository_url = remote_url_result.stdout.strip()
+                    
+                    context_info = {
+                        'repository_url': repository_url,
+                        'branch_name': current_branch,
+                        'commit_style': style
+                    }
+                    click.echo(f"\n上下文信息: {context_info}")
+                except:
+                    click.echo("\n上下文信息: 无法获取")
+                
+                click.echo("=" * 60)
+                click.echo()
             
             suggested_message = api_client.generate_commit_message(
                 diff=diff,
