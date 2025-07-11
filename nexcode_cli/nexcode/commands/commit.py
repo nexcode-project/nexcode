@@ -65,6 +65,45 @@ def handle_commit_command(dry_run, preview, style, check_bugs, no_check_bugs, de
         used_style = style or app_config.get('commit', {}).get('style', 'conventional')
         click.echo(f"› Generating commit message with AI ({used_style} style)...")
         
+        # Debug信息输出
+        if debug:
+            click.secho("\n🐛 DEBUG: LLM提交消息生成输入", fg="yellow", bold=True)
+            click.echo("=" * 60)
+            
+            # 显示基本配置
+            click.echo(f"提交风格: {used_style}")
+            click.echo(f"模型配置: {app_config.get('model', {})}")
+            click.echo(f"API服务器: {app_config.get('api_server', {})}")
+            
+            # 显示diff信息
+            click.echo(f"\nDiff长度: {len(diff)} 字符")
+            if len(diff) > 1000:
+                click.echo("Diff预览 (前500字符):")
+                click.echo(diff[:500])
+                click.echo(f"... (还有 {len(diff) - 500} 字符)")
+            else:
+                click.echo("完整Diff内容:")
+                click.echo(diff)
+            
+            # 显示上下文信息
+            try:
+                current_branch = get_current_branch()
+                remote_url_result = subprocess.run(['git', 'config', '--get', 'remote.origin.url'], 
+                                                 capture_output=True, text=True, check=True)
+                repository_url = remote_url_result.stdout.strip()
+                
+                context_info = {
+                    'repository_url': repository_url,
+                    'branch_name': current_branch,
+                    'commit_style': used_style
+                }
+                click.echo(f"\n上下文信息: {context_info}")
+            except:
+                click.echo("\n上下文信息: 无法获取")
+            
+            click.echo("=" * 60)
+            click.echo()
+        
         # 使用服务端API生成提交消息
         commit_message = api_client.generate_commit_message(diff, used_style)
 
