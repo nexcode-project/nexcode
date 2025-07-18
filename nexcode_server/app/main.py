@@ -12,10 +12,12 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.commits import router as commits_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.documents import router as documents_router
 from app.core.config import settings
 from app.core.database import init_db
 from app.models.schemas import HealthCheckResponse
 from datetime import datetime
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -25,13 +27,14 @@ async def lifespan(app: FastAPI):
     yield
     # 关闭时的清理工作（如果需要）
 
+
 app = FastAPI(
     title="NexCode AIOps Platform",
     description="A comprehensive AIOps platform with LLM-powered development tools, user management, and commit tracking.",
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # 配置 CORS 中间件
@@ -49,6 +52,8 @@ app.include_router(auth_router, prefix="/v1")
 app.include_router(users_router, prefix="/v1")
 app.include_router(commits_router, prefix="/v1")
 app.include_router(admin_router, prefix="/v1")
+app.include_router(documents_router, prefix="/v1")
+
 
 @app.get("/")
 async def root():
@@ -62,15 +67,16 @@ async def root():
             "user_management": True,
             "cas_authentication": True,
             "commit_tracking": True,
-            "openai_compatible": True
+            "openai_compatible": True,
         },
         "endpoints": {
             "auth": "/v1/auth",
-            "users": "/v1/users", 
+            "users": "/v1/users",
             "commits": "/v1/commits",
-            "openai": ["/v1/chat/completions", "/v1/completions"]
-        }
+            "openai": ["/v1/chat/completions", "/v1/completions"],
+        },
     }
+
 
 @app.get("/health", response_model=HealthCheckResponse)
 async def health_check():
@@ -80,7 +86,7 @@ async def health_check():
         version="2.0.0",
         services={
             "git_error_analysis": "operational",
-            "code_review": "operational", 
+            "code_review": "operational",
             "commit_message": "operational",
             "commit_qa": "operational",
             "code_quality": "operational",
@@ -91,16 +97,15 @@ async def health_check():
             "user_management": "operational",
             "cas_authentication": "operational",
             "commit_tracking": "operational",
-            "database": "operational"
+            "database": "operational",
         },
-        timestamp=datetime.now().isoformat()
+        timestamp=datetime.now().isoformat(),
     )
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
-        "main:app",
-        host=settings.HOST,
-        port=settings.PORT,
-        reload=settings.DEBUG
-    ) 
+        "main:app", host=settings.HOST, port=settings.PORT, reload=settings.DEBUG
+    )
