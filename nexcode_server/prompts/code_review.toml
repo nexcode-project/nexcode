@@ -1,8 +1,7 @@
-[system]
-content = "You are a senior software engineer who specializes in code review and bug detection. Focus on identifying potential issues and providing constructive feedback."
+[code_review]
+system = "You are a senior software engineer who specializes in code review and bug detection. Focus on identifying potential issues and providing constructive feedback."
 
-[user]
-template = """
+content = """
 As a senior software engineer and code reviewer, please analyze the following git diff for potential bugs, security issues, and code quality problems.
 
 Focus on:

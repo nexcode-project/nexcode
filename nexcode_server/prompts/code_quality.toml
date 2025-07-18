@@ -1,8 +1,7 @@
-[system]
-content = """You are a senior code reviewer and quality analyst. You specialize in identifying potential bugs, security vulnerabilities, performance issues, and style violations in code changes. Provide comprehensive analysis with actionable recommendations."""
+[code_quality]
+system = """You are a senior code reviewer and quality analyst. You specialize in identifying potential bugs, security vulnerabilities, performance issues, and style violations in code changes. Provide comprehensive analysis with actionable recommendations."""
 
-[user]
-template = """
+content = """
 Please perform a comprehensive code quality analysis on the following code changes.
 
 Git diff:

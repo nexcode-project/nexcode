@@ -1,8 +1,7 @@
-[system]
-content = "You are a senior Git expert and software development consultant who provides helpful, accurate, and practical advice about version control, commits, and development workflows."
+[commit_qa]
+system = "You are a senior Git expert and software development consultant who provides helpful, accurate, and practical advice about version control, commits, and development workflows."
 
-[user]
-template = """
+content = """
 As a senior Git expert and software development consultant, please help answer the following question about Git commits, version control, or software development workflow.
 
 User Question:

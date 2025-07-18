@@ -3,14 +3,14 @@ from sqlalchemy import (
     Integer,
     String,
     DateTime,
-    Boolean,
     Text,
-    JSON,
+    Boolean,
     ForeignKey,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime
+
 from app.core.database import Base
 
 
@@ -21,13 +21,19 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
-    email = Column(String(100), unique=True, index=True, nullable=True)
-    hashed_password = Column(String(255), nullable=True)
+    email = Column(String(100), unique=True, index=True, nullable=False)
     full_name = Column(String(100), nullable=True)
+
+    # 密码认证字段
+    password_hash = Column(String(255), nullable=True)  # 密码哈希
+
+    # CAS相关字段
+    cas_user_id = Column(String(100), unique=True, index=True, nullable=True)
+    cas_attributes = Column(JSON, nullable=True)  # 存储CAS返回的用户属性
 
     # 用户状态
     is_active = Column(Boolean, default=True)
-    is_verified = Column(Boolean, default=False)
+    is_superuser = Column(Boolean, default=False)
 
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -36,29 +42,14 @@ class User(Base):
     )
     last_login = Column(DateTime(timezone=True), nullable=True)
 
-    # 用户配置
-    preferences = Column(JSON, nullable=True)
+    # 关系
+    commits = relationship("CommitInfo", back_populates="user")
 
-    # 关系 - 使用字符串引用避免循环导入
-    commit_infos = relationship(
-        "CommitInfo", back_populates="user", cascade="all, delete-orphan"
-    )
-    sessions = relationship(
-        "UserSession", back_populates="user", cascade="all, delete-orphan"
-    )
-    api_keys = relationship(
-        "APIKey", back_populates="user", cascade="all, delete-orphan"
-    )
-
-    # 文档相关关系 - 使用字符串引用
+    # 文档关系
     owned_documents = relationship(
         "Document", foreign_keys="Document.owner_id", back_populates="owner"
     )
-    collaborated_documents = relationship(
-        "DocumentCollaborator",
-        foreign_keys="DocumentCollaborator.user_id",
-        back_populates="user",
-    )
+    collaborated_documents = relationship("DocumentCollaborator", back_populates="user")
 
 
 class CommitInfo(Base):
@@ -108,7 +99,7 @@ class CommitInfo(Base):
     committed_at = Column(DateTime(timezone=True), nullable=True)  # 实际提交时间
 
     # 关系
-    user = relationship("User", back_populates="commit_infos")
+    user = relationship("User", back_populates="commits")
 
 
 class UserSession(Base):
@@ -134,9 +125,6 @@ class UserSession(Base):
 
     # 状态
     is_active = Column(Boolean, default=True)
-
-    # 关系
-    user = relationship("User", back_populates="sessions")
 
 
 class APIKey(Base):
@@ -166,9 +154,6 @@ class APIKey(Base):
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=True)  # 可选的过期时间
-
-    # 关系
-    user = relationship("User", back_populates="api_keys")
 
 
 class SystemSettings(Base):

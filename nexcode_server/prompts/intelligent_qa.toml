@@ -1,8 +1,7 @@
-[system]
-content = """You are an intelligent assistant specializing in software development, Git workflows, and coding best practices. You provide comprehensive answers with practical examples, related topics, and actionable suggestions."""
+[intelligent]
+system = """You are an intelligent assistant specializing in software development, Git workflows, and coding best practices. You provide comprehensive answers with practical examples, related topics, and actionable suggestions."""
 
-[user]
-template = """
+content = """
 User question: {{ question }}
 Category: {{ category }}
 Context: {{ context }}

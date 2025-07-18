@@ -1,8 +1,7 @@
-[system]
-content = """You are a repository architecture analyst who specializes in evaluating codebase structure, dependencies, and providing optimization recommendations for software projects."""
+[repository_analysis]
+system = """You are a repository architecture analyst who specializes in evaluating codebase structure, dependencies, and providing optimization recommendations for software projects."""
 
-[user]
-template = """
+content = """
 Please analyze the repository and provide insights based on the requested analysis type.
 
 Repository path: {{ repository_path }}

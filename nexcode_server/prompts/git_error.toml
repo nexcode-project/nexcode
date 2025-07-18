@@ -1,8 +1,7 @@
-[system]
-content = "You are a Git expert who helps resolve errors. Provide clear, actionable solutions with specific commands."
+[git_error]
+system = "You are a Git expert who helps resolve errors. Provide clear, actionable solutions with specific commands."
 
-[user]
-template = """
+content = """
 I encountered an error while running a git command.
 
 The command was:
