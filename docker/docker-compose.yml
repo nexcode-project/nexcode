@@ -28,10 +28,12 @@ services:
       - REQUIRE_AUTH=false
       - API_TOKEN=your-server-token
       - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/nexcode
+      - MONGODB_URL=mongodb://mongo:27017/nexcode_docs
     volumes:
       - ../nexcode_server:/app
     depends_on:
       - db
+      - mongo
 
   db:
     image: postgres:13
@@ -42,5 +44,32 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  mongo:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: nexcode_docs
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    command: mongod --auth
+
+  mongo-express:
+    image: mongo-express:1.0.0
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: admin123
+      ME_CONFIG_MONGODB_URL: mongodb://admin:admin123@mongo:27017/
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin123
+    depends_on:
+      - mongo
+
 volumes:
-  db_data: 
+  db_data:
+  mongo_data: 

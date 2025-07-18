@@ -411,15 +411,28 @@ def push(branch, message, auto_commit, dry_run, debug):
         if auto_commit or not message:
             final_message = message or suggested_message
             
-            # 确认提交消息
+            # 确认提交消息 - 改进用户编辑体验
             if not auto_commit:
-                if not click.confirm(f"使用建议的提交消息吗?\n消息: {final_message}"):
-                    final_message = click.prompt("请输入提交消息")
+                # 显示建议消息并允许用户编辑
+                click.echo(f"\n📝 建议的提交消息: {suggested_message}")
+                if click.confirm("是否使用建议的提交消息?"):
+                    final_message = suggested_message
+                else:
+                    # 允许用户输入自定义消息
+                    custom_message = click.prompt("请输入提交消息", default=suggested_message)
+                    if custom_message and custom_message.strip():
+                        final_message = custom_message.strip()
+                    else:
+                        final_message = suggested_message
             
             # 执行提交
             try:
-                # 确保提交消息是UTF-8编码
+                # 确保提交消息是UTF-8编码，但不过度清理用户输入
                 final_message = final_message.encode('utf-8').decode('utf-8')
+                
+                # 只进行基本的清理，保留用户编辑
+                final_message = clean_user_commit_message(final_message)
+                
                 subprocess.run(['git', 'commit', '-m', final_message], 
                              check=True, encoding='utf-8')
                 click.echo(f"✅ 代码已提交: {final_message}")
@@ -433,8 +446,8 @@ def push(branch, message, auto_commit, dry_run, debug):
                     'repository_name': repository_name,
                     'branch_name': current_branch,
                     'commit_hash': commit_hash,
-                    'ai_generated_message': final_message,
-                    'final_commit_message': final_message,
+                    'ai_generated_message': suggested_message,  # 保存AI生成的原始消息
+                    'final_commit_message': final_message,      # 保存最终使用的消息
                     'diff_content': diff,
                     'commit_style': 'conventional',
                     'status': 'committed'
@@ -468,7 +481,7 @@ def push(branch, message, auto_commit, dry_run, debug):
 
 
 def clean_commit_message(message):
-    """清理提交消息，确保简洁适合Git提交"""
+    """清理AI生成的提交消息，确保简洁适合Git提交"""
     if not message:
         return "feat: update code"
     
@@ -497,9 +510,17 @@ def clean_commit_message(message):
     if '{' in first_line or '}' in first_line:
         # 尝试提取引号中的内容
         import re
-        match = re.search(r'["\']([^"\']+)["\']', first_line)
-        if match:
-            first_line = match.group(1)
+        patterns = [
+            r'["\']([^"\']+)["\']',  # 引号包围的内容
+            r'commit_message["\s]*:["\s]*["\']([^"\']+)["\']',  # JSON字段
+            r'message["\s]*:["\s]*["\']([^"\']+)["\']'  # message字段
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, first_line)
+            if match:
+                first_line = match.group(1)
+                break
         else:
             # 如果没有找到，使用默认消息
             first_line = "chore: update code"
@@ -509,15 +530,105 @@ def clean_commit_message(message):
         first_line = first_line[:69] + "..."
     
     # 如果没有conventional commits格式，尝试添加
-    if not any(first_line.startswith(prefix) for prefix in ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:']):
+    conventional_prefixes = ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:', 'perf:', 'ci:', 'build:']
+    
+    if not any(first_line.startswith(prefix) for prefix in conventional_prefixes):
         # 简单判断类型
-        if 'fix' in first_line.lower() or 'bug' in first_line.lower():
+        lower_line = first_line.lower()
+        if any(word in lower_line for word in ['fix', 'bug', 'error', 'issue', 'problem']):
             first_line = f"fix: {first_line}"
-        elif 'add' in first_line.lower() or 'new' in first_line.lower():
+        elif any(word in lower_line for word in ['add', 'new', 'create', 'implement', 'feature']):
             first_line = f"feat: {first_line}"
-        elif 'update' in first_line.lower() or 'modify' in first_line.lower():
+        elif any(word in lower_line for word in ['update', 'modify', 'change', 'improve', 'enhance']):
             first_line = f"refactor: {first_line}"
+        elif any(word in lower_line for word in ['doc', 'readme', 'comment']):
+            first_line = f"docs: {first_line}"
+        elif any(word in lower_line for word in ['test', 'spec']):
+            first_line = f"test: {first_line}"
+        elif any(word in lower_line for word in ['style', 'format', 'lint']):
+            first_line = f"style: {first_line}"
         else:
             first_line = f"chore: {first_line}"
+    
+    return first_line 
+
+
+def clean_user_commit_message(message):
+    """清理用户输入的提交消息，使其符合Git提交规范，但保留用户编辑"""
+    if not message:
+        return "feat: update code"
+    
+    # 移除可能的JSON标记
+    message = message.replace('```json', '').replace('```', '').strip()
+    
+    # 尝试解析JSON（如果LLM返回了JSON格式）
+    import json
+    try:
+        parsed = json.loads(message)
+        if isinstance(parsed, dict) and 'commit_message' in parsed:
+            message = parsed['commit_message']
+        elif isinstance(parsed, dict) and 'message' in parsed:
+            message = parsed['message']
+    except:
+        pass  # 不是JSON，继续处理纯文本
+    
+    # 只取第一行作为提交消息
+    lines = message.strip().split('\n')
+    first_line = lines[0].strip()
+    
+    # 移除引号和其他格式标记
+    first_line = first_line.strip('"\'`')
+    
+    # 如果包含JSON结构标记，提取实际消息
+    if '{' in first_line or '}' in first_line:
+        # 尝试提取引号中的内容
+        import re
+        patterns = [
+            r'["\']([^"\']+)["\']',  # 引号包围的内容
+            r'commit_message["\s]*:["\s]*["\']([^"\']+)["\']',  # JSON字段
+            r'message["\s]*:["\s]*["\']([^"\']+)["\']'  # message字段
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, first_line)
+            if match:
+                first_line = match.group(1)
+                break
+        else:
+            # 如果没有找到，使用默认消息
+            first_line = "chore: update code"
+    
+    # 如果第一行太长，截断到合理长度
+    if len(first_line) > 72:
+        first_line = first_line[:69] + "..."
+    
+    # 检查是否已经有conventional commits格式
+    conventional_prefixes = ['feat:', 'fix:', 'docs:', 'style:', 'refactor:', 'test:', 'chore:', 'perf:', 'ci:', 'build:']
+    
+    # 如果用户已经输入了conventional commits格式，直接返回
+    if any(first_line.startswith(prefix) for prefix in conventional_prefixes):
+        return first_line
+    
+    # 如果用户没有使用conventional commits格式，但内容看起来是有效的提交消息，直接返回
+    # 这样可以保留用户的编辑意图
+    if len(first_line) > 3 and not first_line.startswith('{') and not first_line.startswith('['):
+        return first_line
+    
+    # 只有在内容明显不是提交消息时才添加前缀
+    lower_line = first_line.lower()
+    if any(word in lower_line for word in ['fix', 'bug', 'error', 'issue', 'problem']):
+        first_line = f"fix: {first_line}"
+    elif any(word in lower_line for word in ['add', 'new', 'create', 'implement', 'feature']):
+        first_line = f"feat: {first_line}"
+    elif any(word in lower_line for word in ['update', 'modify', 'change', 'improve', 'enhance']):
+        first_line = f"refactor: {first_line}"
+    elif any(word in lower_line for word in ['doc', 'readme', 'comment']):
+        first_line = f"docs: {first_line}"
+    elif any(word in lower_line for word in ['test', 'spec']):
+        first_line = f"test: {first_line}"
+    elif any(word in lower_line for word in ['style', 'format', 'lint']):
+        first_line = f"style: {first_line}"
+    else:
+        first_line = f"chore: {first_line}"
     
     return first_line 
