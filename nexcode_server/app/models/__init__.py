@@ -2,6 +2,7 @@ from .database import User, CommitInfo, UserSession, APIKey, SystemSettings
 from .document_models import (
     Document,
     DocumentCollaborator,
+    DocumentVersion,
     PermissionLevel,
     DocumentStatus,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "SystemSettings",
     "Document",
     "DocumentCollaborator",
+    "DocumentVersion",
     "PermissionLevel",
     "DocumentStatus",
 ]
