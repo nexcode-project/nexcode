@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 """
-调试TOML文件加载
+调试code_quality.toml文件加载
 """
 
 import toml
 from pathlib import Path
 
-file_name = "push_strategy.toml"
-toml_name = "push_strategy"
-def debug_toml_loading():
-    """调试TOML文件加载"""
-    prompt_path = Path(__file__).parent.parent / "prompts" / file_name
+def debug_code_quality_toml():
+    """调试code_quality.toml文件加载"""
+    prompt_path = Path(__file__).parent.parent / "prompts" / "code_quality.toml"
     
     print(f"📁 文件路径: {prompt_path}")
     print(f"📁 文件存在: {prompt_path.exists()}")
@@ -27,7 +25,7 @@ def debug_toml_loading():
                 print()
             
             # 尝试解析TOML
-            config = toml.loads(content)
+            config = toml.load(prompt_path)
             print("🔍 解析结果:")
             print("=" * 50)
             print(config)
@@ -35,19 +33,19 @@ def debug_toml_loading():
             print()
             
             # 检查字段
-            if toml_name in config:
-                push_config = config[toml_name]
-                print(f"📋 {toml_name}:")
-                print(f"  - system: {'存在' if 'system' in push_config else '不存在'}")
-                print(f"  - content: {'存在' if 'content' in push_config else '不存在'}")
-                print(f"  - 所有字段: {list(push_config.keys())}")
+            if 'code_quality' in config:
+                quality_config = config['code_quality']
+                print("📋 code_quality字段:")
+                print(f"  - system: {'存在' if 'system' in quality_config else '不存在'}")
+                print(f"  - content: {'存在' if 'content' in quality_config else '不存在'}")
+                print(f"  - 所有字段: {list(quality_config.keys())}")
                 
-                if 'system' in push_config:
-                    print(f"  - system长度: {len(push_config['system'])}")
-                if 'content' in push_config:
-                    print(f"  - content长度: {len(push_config['content'])}")
+                if 'system' in quality_config:
+                    print(f"  - system长度: {len(quality_config['system'])}")
+                if 'content' in quality_config:
+                    print(f"  - content长度: {len(quality_config['content'])}")
             else:
-                print("❌ 没有找到push_strategy字段")
+                print("❌ 没有找到code_quality字段")
                 print(f"  可用字段: {list(config.keys())}")
                 
         except Exception as e:
@@ -56,4 +54,4 @@ def debug_toml_loading():
             traceback.print_exc()
 
 if __name__ == "__main__":
-    debug_toml_loading() 
+    debug_code_quality_toml() 
