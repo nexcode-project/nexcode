@@ -11,10 +11,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from datetime import datetime
 import enum
 
-# 使用统一的Base
 from app.core.database import Base
 
 
@@ -59,16 +57,13 @@ class Document(Base):
     # 版本控制
     version = Column(Integer, default=1)
 
-    # 关系 - 使用字符串引用
+    # 关系
     owner = relationship(
         "User", foreign_keys=[owner_id], back_populates="owned_documents"
     )
     last_editor = relationship("User", foreign_keys=[last_editor_id])
     collaborators = relationship(
         "DocumentCollaborator", back_populates="document", cascade="all, delete-orphan"
-    )
-    versions = relationship(
-        "DocumentVersion", back_populates="document", cascade="all, delete-orphan"
     )
 
 
@@ -84,7 +79,7 @@ class DocumentCollaborator(Base):
     added_at = Column(DateTime(timezone=True), server_default=func.now())
     added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
 
-    # 关系
+    # 关系 - 明确指定外键
     document = relationship("Document", back_populates="collaborators")
     user = relationship(
         "User", foreign_keys=[user_id], back_populates="collaborated_documents"
@@ -102,14 +97,10 @@ class DocumentVersion(Base):
     version_number = Column(Integer, nullable=False)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)
-
-    # 变更信息
-    changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     change_description = Column(String(500), nullable=True)
-    changes_diff = Column(Text, nullable=True)  # 存储diff信息
-
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # 关系
-    document = relationship("Document", back_populates="versions")
-    changed_by_user = relationship("User")
+    document = relationship("Document")
+    changed_by_user = relationship("User", foreign_keys=[changed_by])

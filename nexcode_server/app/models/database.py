@@ -42,14 +42,26 @@ class User(Base):
     )
     last_login = Column(DateTime(timezone=True), nullable=True)
 
-    # 关系
-    commits = relationship("CommitInfo", back_populates="user")
+    # 关系 - 明确指定外键
+    commit_infos = relationship(
+        "CommitInfo", back_populates="user", cascade="all, delete-orphan"
+    )
+    sessions = relationship(
+        "UserSession", back_populates="user", cascade="all, delete-orphan"
+    )
+    api_keys = relationship(
+        "APIKey", back_populates="user", cascade="all, delete-orphan"
+    )
 
-    # 文档关系
+    # 文档相关关系 - 明确指定外键避免歧义
     owned_documents = relationship(
         "Document", foreign_keys="Document.owner_id", back_populates="owner"
     )
-    collaborated_documents = relationship("DocumentCollaborator", back_populates="user")
+    collaborated_documents = relationship(
+        "DocumentCollaborator",
+        foreign_keys="DocumentCollaborator.user_id",
+        back_populates="user",
+    )
 
 
 class CommitInfo(Base):
@@ -99,7 +111,7 @@ class CommitInfo(Base):
     committed_at = Column(DateTime(timezone=True), nullable=True)  # 实际提交时间
 
     # 关系
-    user = relationship("User", back_populates="commits")
+    user = relationship("User", back_populates="commit_infos")
 
 
 class UserSession(Base):
@@ -125,6 +137,9 @@ class UserSession(Base):
 
     # 状态
     is_active = Column(Boolean, default=True)
+
+    # 关系
+    user = relationship("User", back_populates="sessions")
 
 
 class APIKey(Base):
@@ -154,6 +169,9 @@ class APIKey(Base):
     # 时间戳
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=True)  # 可选的过期时间
+
+    # 关系
+    user = relationship("User", back_populates="api_keys")
 
 
 class SystemSettings(Base):
