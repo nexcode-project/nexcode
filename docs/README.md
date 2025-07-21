@@ -1,7 +1,7 @@
 # NexCode
 
 <div align="center">
-  <img src="logo.png" alt="NexCode Logo" width="200">
+  <img src="images/logo.png" alt="NexCode Logo" width="200">
   <h3>智能 AI 代码助手平台</h3>
   <p>基于大语言模型的全栈开发辅助工具，提供代码审查、智能问答、自动化工作流等功能</p>
 </div>
