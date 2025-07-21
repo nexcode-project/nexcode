@@ -239,10 +239,6 @@ def get_llm_solution(
                 model_name,
                 use_json,
             )
-
-        print(f"LLM response: {result}")
-        print("=== END LLM DEBUG ===\n")
-
         return result
     except Exception as e:
         error_msg = f"Error processing request: {str(e)}"
