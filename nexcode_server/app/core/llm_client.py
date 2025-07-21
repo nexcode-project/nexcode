@@ -178,8 +178,6 @@ def get_llm_solution(
         config = load_config()
 
         system_content, user_content = get_rendered_prompts(task_type, data)
-        print(f"System content: {system_content}")
-        print(f"User content: {user_content}")
         # Token统计
         try:
             final_model = model_name or settings.OPENAI_MODEL
