@@ -56,6 +56,7 @@ class Document(Base):
 
     # 状态和时间
     status = Column(Enum(DocumentStatus), default=DocumentStatus.ACTIVE)
+    version = Column(Integer, nullable=False)  # 版本号
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

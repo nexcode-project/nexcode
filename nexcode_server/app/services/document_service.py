@@ -1,6 +1,6 @@
-from typing import Optional, List
+from typing import Dict, Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, desc
+from sqlalchemy import func, select, and_, or_, desc
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException, status
 
@@ -68,7 +68,6 @@ class DocumentService:
                 selectinload(Document.collaborators).selectinload(
                     DocumentCollaborator.user
                 ),
-                selectinload(Document.versions),
             )
             .where(
                 and_(
@@ -247,7 +246,7 @@ class DocumentService:
 
         stmt = (
             select(DocumentVersion)
-            .options(selectinload(DocumentVersion.changed_by_user))
+            .options(selectinload(DocumentVersion.changed_by))
             .where(DocumentVersion.document_id == document_id)
             .order_by(desc(DocumentVersion.version_number))
         )
@@ -369,6 +368,50 @@ class DocumentService:
         collaborator = result.scalar_one_or_none()
 
         return collaborator is not None
+
+    async def get_user_documents(
+        self,
+        db,
+        user_id: int,
+        skip: int = 0,
+        limit: int = 100,
+        search: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> Dict:
+        """获取用户的文档列表，带分页信息"""
+        # 基础查询条件
+        base_condition = or_(
+            Document.owner_id == user_id,
+            Document.id.in_(
+                select(DocumentCollaborator.document_id).where(
+                    DocumentCollaborator.user_id == user_id
+                )
+            ),
+        )
+        query = select(Document).where(base_condition)
+        count_query = select(func.count()).select_from(Document).where(base_condition)
+
+        # 搜索
+        if search:
+            query = query.where(Document.title.ilike(f"%{search}%"))
+            count_query = count_query.where(Document.title.ilike(f"%{search}%"))
+        # 分类
+        if category:
+            query = query.where(Document.category == category)
+            count_query = count_query.where(Document.category == category)
+
+        # 排序、分页
+        query = query.order_by(Document.updated_at.desc()).offset(skip).limit(limit)
+
+        # 查询总数
+        total_result = await db.execute(count_query)
+        total = total_result.scalar() or 0
+
+        # 查询文档
+        result = await db.execute(query)
+        documents = result.scalars().all()
+
+        return {"documents": documents, "total": total, "skip": skip, "limit": limit}
 
 
 # 创建服务实例
