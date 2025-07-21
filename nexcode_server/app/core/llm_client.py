@@ -178,8 +178,6 @@ def get_llm_solution(
         config = load_config()
 
         system_content, user_content = get_rendered_prompts(task_type, data)
-        print(f"System content: {system_content}")
-        print(f"User content: {user_content}")
         # Token统计
         try:
             final_model = model_name or settings.OPENAI_MODEL
@@ -239,10 +237,6 @@ def get_llm_solution(
                 model_name,
                 use_json,
             )
-
-        print(f"LLM response: {result}")
-        print("=== END LLM DEBUG ===\n")
-
         return result
     except Exception as e:
         error_msg = f"Error processing request: {str(e)}"

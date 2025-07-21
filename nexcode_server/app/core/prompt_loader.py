@@ -74,9 +74,6 @@ def get_rendered_prompts(task_type: str, context: Dict[str, Any]) -> tuple[str, 
     prompt_config = load_prompt(task_type, context)
     system_content = prompt_config.get(task_type, {}).get("system", "")
     user_template = prompt_config.get(task_type, {}).get("content", "")
-    print(f"System content: {system_content}")
-    print(f"User template: {user_template}")
     user_content = render_prompt(user_template, context)
-    print(f"User content: {user_content}")
 
     return system_content, user_content
