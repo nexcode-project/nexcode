@@ -383,12 +383,19 @@ def push(branch, message, auto_commit, dry_run, debug):
         suggested_message = clean_commit_message(suggested_message)
         
         push_command = result.get('push_command', f'git push origin {current_branch}')
+        suggested_branch = result.get('branch_name', None)
         pre_push_checks = result.get('pre_push_checks', [])
         warnings = result.get('warnings', [])
+        
+        # 从push_command中提取分支名
+        import re
+        branch_match = re.search(r'git push origin ([^\s]+)', push_command)
+        extracted_branch = branch_match.group(1) if branch_match else current_branch
         
         # 显示推送策略
         click.echo(f"\n📋 推送策略:")
         click.echo(f"建议提交消息: {suggested_message}")
+        click.echo(f"建议分支: {suggested_branch or extracted_branch}")
         click.echo(f"推送命令: {push_command}")
         
         # 显示预检查项
@@ -406,6 +413,22 @@ def push(branch, message, auto_commit, dry_run, debug):
         if dry_run:
             click.echo(f"\n🏃 Dry Run模式 - 不会实际执行推送")
             return
+        
+        # 处理分支创建和切换
+        target_branch_name = suggested_branch or extracted_branch
+        if target_branch_name and target_branch_name != current_branch:
+            if click.confirm(f"是否创建并切换到建议的分支 '{target_branch_name}'?"):
+                try:
+                    # 创建并切换到新分支
+                    subprocess.run(['git', 'checkout', '-b', target_branch_name], check=True)
+                    click.echo(f"✅ 已创建并切换到分支: {target_branch_name}")
+                    current_branch = target_branch_name
+                except subprocess.CalledProcessError as e:
+                    click.echo(f"❌ 创建分支失败: {e}")
+                    if not click.confirm("是否继续使用当前分支?"):
+                        return
+            else:
+                click.echo(f"继续使用当前分支: {current_branch}")
         
         # 处理提交
         if auto_commit or not message:
