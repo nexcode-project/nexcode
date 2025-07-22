@@ -1,24 +1,40 @@
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel
 
 from app.core.dependencies import CurrentUser, DatabaseSession
 from app.services.document_service import document_service
 from app.services.permission_service import permission_service
 from app.services.auth_service import auth_service
+from app.services.document_storage_service import document_storage_service
 from app.models.document_schemas import (
-    DocumentCreate, DocumentUpdate, DocumentResponse, DocumentListResponse,
-    DocumentListResult, DocumentVersionResponse, CollaboratorAdd, 
-    CollaboratorUpdate, CollaboratorResponse, PermissionLevel, DocumentSearchQuery
+    DocumentCreate,
+    DocumentListItem,
+    DocumentUpdate,
+    DocumentResponse,
+    DocumentListResponse,
+    DocumentListResult,
+    DocumentVersionResponse,
+    CollaboratorAdd,
+    CollaboratorUpdate,
+    CollaboratorResponse,
+    PermissionLevel,
+    DocumentSearchQuery,
+    UserInfo,
 )
+
+
+class VersionSnapshotRequest(BaseModel):
+    description: str
+
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
+
 @router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 async def create_document(
-    document_data: DocumentCreate,
-    current_user: CurrentUser,
-    db: DatabaseSession
+    document_data: DocumentCreate, current_user: CurrentUser, db: DatabaseSession
 ):
     """创建文档"""
     document = await document_service.create_document(
@@ -27,14 +43,28 @@ async def create_document(
         title=document_data.title,
         content=document_data.content,
         category=document_data.category,
-        tags=document_data.tags
+        tags=document_data.tags,
     )
-    
+    user_info = user_to_dict(current_user)
     # 设置用户权限信息
-    response_data = DocumentResponse.model_validate(document)
+    # response_data = DocumentResponse.model_validate(document)
+    response_data = DocumentResponse(
+        id=document.id,
+        title=document.title,
+        content=document.content,
+        category=document.category,
+        tags=document.tags,
+        status=document.status,
+        version=document.version,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+        owner=user_info,
+        collaborators=[],
+        user_permission=PermissionLevel.OWNER,
+    )
     response_data.user_permission = PermissionLevel.OWNER
-    
     return response_data
+
 
 @router.get("/", response_model=DocumentListResult)
 async def get_user_documents(
@@ -43,7 +73,7 @@ async def get_user_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None),
-    category: Optional[str] = Query(None)
+    category: Optional[str] = Query(None),
 ):
     """获取用户文档列表"""
     result = await document_service.get_user_documents(
@@ -52,66 +82,81 @@ async def get_user_documents(
         skip=skip,
         limit=limit,
         search=search,
-        category=category
+        category=category,
     )
-    
+
     # 转换为响应格式
     documents = []
     for doc in result["documents"]:
-        doc_response = DocumentListResponse.model_validate(doc)
-        
-        # 设置用户权限
-        if doc.owner_id == current_user.id:
-            doc_response.user_permission = PermissionLevel.OWNER
-        else:
-            # 查找协作者权限
-            for collab in doc.collaborators:
-                if collab.user_id == current_user.id:
-                    doc_response.user_permission = collab.permission
-                    break
-        
-        doc_response.collaborator_count = len(doc.collaborators)
+        doc_response = DocumentListItem(
+            id=doc.id,
+            title=doc.title,
+            content=doc.content,
+            category=doc.category,
+            tags=doc.tags,
+            status=doc.status,
+            version=doc.version,
+            created_at=doc.created_at,
+            updated_at=doc.updated_at,
+            owner=(
+                UserInfo.model_validate(user_to_dict(doc.owner)) if doc.owner else None
+            ),
+            collaborators=[],
+            user_permission=PermissionLevel.READER,  # 你的权限逻辑
+        )
         documents.append(doc_response)
-    
+
     return DocumentListResult(
         documents=documents,
         total=result["total"],
         skip=result["skip"],
-        limit=result["limit"]
+        limit=result["limit"],
     )
+
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 async def get_document(
-    document_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession
+    document_id: int, current_user: CurrentUser, db: DatabaseSession
 ):
     """获取文档详情"""
-    document = await document_service.get_document(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id
+    document = await document_service.get_document(db, document_id, current_user.id)
+    
+    # 转换为响应格式
+    user_info = user_to_dict(document.owner) if document.owner else None
+    collaborators = []
+    
+    for collab in document.collaborators:
+        collaborator_response = CollaboratorResponse(
+            user=UserInfo.model_validate(user_to_dict(collab.user)),
+            permission=collab.permission,
+            added_at=collab.added_at,
+        )
+        collaborators.append(collaborator_response)
+    
+    response_data = DocumentResponse(
+        id=document.id,
+        title=document.title,
+        content=document.content,
+        category=document.category,
+        tags=document.tags,
+        status=document.status,
+        version=document.version,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+        owner=UserInfo.model_validate(user_info) if user_info else None,
+        collaborators=collaborators,
+        user_permission=PermissionLevel.READER,  # 根据实际权限设置
     )
     
-    response_data = DocumentResponse.model_validate(document)
-    
-    # 设置用户权限
-    if document.owner_id == current_user.id:
-        response_data.user_permission = PermissionLevel.OWNER
-    else:
-        for collab in document.collaborators:
-            if collab.user_id == current_user.id:
-                response_data.user_permission = collab.permission
-                break
-    
     return response_data
+
 
 @router.put("/{document_id}", response_model=DocumentResponse)
 async def update_document(
     document_id: int,
     document_data: DocumentUpdate,
     current_user: CurrentUser,
-    db: DatabaseSession
+    db: DatabaseSession,
 ):
     """更新文档"""
     document = await document_service.update_document(
@@ -122,155 +167,181 @@ async def update_document(
         content=document_data.content,
         category=document_data.category,
         tags=document_data.tags,
-        change_description=document_data.change_description
+        change_description=document_data.change_description,
     )
     
-    response_data = DocumentResponse.model_validate(document)
+    # 转换为响应格式
+    user_info = user_to_dict(document.owner) if document.owner else None
+    collaborators = []
     
-    # 设置用户权限
-    if document.owner_id == current_user.id:
-        response_data.user_permission = PermissionLevel.OWNER
-    else:
-        for collab in document.collaborators:
-            if collab.user_id == current_user.id:
-                response_data.user_permission = collab.permission
-                break
+    for collab in document.collaborators:
+        collaborator_response = CollaboratorResponse(
+            user=UserInfo.model_validate(user_to_dict(collab.user)),
+            permission=collab.permission,
+            added_at=collab.added_at,
+        )
+        collaborators.append(collaborator_response)
+    
+    response_data = DocumentResponse(
+        id=document.id,
+        title=document.title,
+        content=document.content,
+        category=document.category,
+        tags=document.tags,
+        status=document.status,
+        version=document.version,
+        created_at=document.created_at,
+        updated_at=document.updated_at,
+        owner=UserInfo.model_validate(user_info) if user_info else None,
+        collaborators=collaborators,
+        user_permission=PermissionLevel.READER,  # 根据实际权限设置
+    )
     
     return response_data
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete("/{document_id}")
 async def delete_document(
-    document_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession
+    document_id: int, current_user: CurrentUser, db: DatabaseSession
 ):
     """删除文档"""
-    await document_service.delete_document(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id
-    )
+    await document_service.delete_document(db, document_id, current_user.id)
+    return {"message": "文档已删除"}
 
-# 协作者管理
-@router.get("/{document_id}/collaborators", response_model=List[CollaboratorResponse])
-async def get_document_collaborators(
-    document_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession
-):
-    """获取文档协作者列表"""
-    collaborators = await permission_service.get_document_collaborators(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id
-    )
-    
-    return [CollaboratorResponse.model_validate(collab) for collab in collaborators]
 
-@router.post("/{document_id}/collaborators", response_model=CollaboratorResponse, status_code=status.HTTP_201_CREATED)
-async def add_document_collaborator(
-    document_id: int,
-    collaborator_data: CollaboratorAdd,
-    current_user: CurrentUser,
-    db: DatabaseSession
-):
-    """添加文档协作者"""
-    # 根据邮箱查找用户
-    user = await auth_service.get_user_by_email(db, collaborator_data.user_email)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="用户不存在"
-        )
-    
-    collaborator = await permission_service.add_collaborator(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id,
-        collaborator_user_id=user.id,
-        permission=collaborator_data.permission
-    )
-    
-    return CollaboratorResponse.model_validate(collaborator)
+# 新增的文档存储相关端点
 
-@router.put("/{document_id}/collaborators/{collaborator_user_id}", response_model=CollaboratorResponse)
-async def update_collaborator_permission(
-    document_id: int,
-    collaborator_user_id: int,
-    permission_data: CollaboratorUpdate,
-    current_user: CurrentUser,
-    db: DatabaseSession
-):
-    """更新协作者权限"""
-    collaborator = await permission_service.update_collaborator_permission(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id,
-        collaborator_user_id=collaborator_user_id,
-        new_permission=permission_data.permission
-    )
-    
-    return CollaboratorResponse.model_validate(collaborator)
-
-@router.delete("/{document_id}/collaborators/{collaborator_user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_document_collaborator(
-    document_id: int,
-    collaborator_user_id: int,
-    current_user: CurrentUser,
-    db: DatabaseSession
-):
-    """移除文档协作者"""
-    await permission_service.remove_collaborator(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id,
-        collaborator_user_id=collaborator_user_id
-    )
-
-# 版本管理
-@router.get("/{document_id}/versions", response_model=List[DocumentVersionResponse])
+@router.get("/{document_id}/versions")
 async def get_document_versions(
-    document_id: int,
-    current_user: CurrentUser,
+    document_id: int, 
+    current_user: CurrentUser, 
     db: DatabaseSession,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=50)
+    limit: int = Query(10, ge=1, le=50)
 ):
     """获取文档版本历史"""
-    versions = await document_service.get_document_versions(
-        db=db,
-        document_id=document_id,
-        user_id=current_user.id,
-        skip=skip,
-        limit=limit
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.READER
     )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问此文档"
+        )
     
-    return [DocumentVersionResponse.model_validate(version) for version in versions]
+    versions = await document_storage_service.get_document_versions(document_id, limit)
+    
+    version_responses = []
+    for version in versions:
+        version_response = DocumentVersionResponse(
+            id=version.id,
+            version_number=version.version_number,
+            title=version.title,
+            content=version.content,
+            change_description=version.change_description,
+            created_at=version.created_at,
+            changed_by=version.changed_by
+        )
+        version_responses.append(version_response)
+    
+    return {"versions": version_responses}
 
-@router.post("/{document_id}/revert/{version_number}", response_model=DocumentResponse)
-async def revert_document_to_version(
+
+@router.post("/{document_id}/versions")
+async def create_version_snapshot(
+    document_id: int,
+    request: VersionSnapshotRequest,
+    current_user: CurrentUser,
+    db: DatabaseSession
+):
+    """创建版本快照"""
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.EDITOR
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限编辑此文档"
+        )
+    
+    await document_storage_service.create_version_snapshot(document_id, current_user.id, request.description)
+    return {"message": "版本快照已创建"}
+
+
+@router.post("/{document_id}/versions/{version_number}/restore")
+async def restore_version(
     document_id: int,
     version_number: int,
     current_user: CurrentUser,
     db: DatabaseSession
 ):
-    """回滚文档到指定版本"""
-    document = await document_service.revert_to_version(
-        db=db,
-        document_id=document_id,
-        version_number=version_number,
-        user_id=current_user.id
+    """恢复到指定版本"""
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.EDITOR
     )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限编辑此文档"
+        )
     
-    response_data = DocumentResponse.model_validate(document)
-    
-    # 设置用户权限
-    if document.owner_id == current_user.id:
-        response_data.user_permission = PermissionLevel.OWNER
+    success = await document_storage_service.restore_version(document_id, version_number, current_user.id)
+    if success:
+        return {"message": f"已恢复到版本 {version_number}"}
     else:
-        for collab in document.collaborators:
-            if collab.user_id == current_user.id:
-                response_data.user_permission = collab.permission
-                break
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在"
+        )
+
+
+@router.get("/{document_id}/statistics")
+async def get_document_statistics(
+    document_id: int,
+    current_user: CurrentUser,
+    db: DatabaseSession
+):
+    """获取文档统计信息"""
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.READER
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问此文档"
+        )
     
-    return response_data
+    stats = await document_storage_service.get_document_statistics(document_id)
+    return stats
+
+
+@router.post("/{document_id}/operations/cleanup")
+async def cleanup_old_operations(
+    document_id: int,
+    current_user: CurrentUser,
+    db: DatabaseSession,
+    keep_count: int = Query(100, ge=10, le=1000)
+):
+    """清理旧的操作记录"""
+    # 检查权限（只有文档所有者可以清理）
+    document = await document_service.get_document(db, document_id, current_user.id)
+    if document.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="只有文档所有者可以清理操作记录"
+        )
+    
+    await document_storage_service.cleanup_old_operations(document_id, keep_count)
+    return {"message": f"已清理旧操作记录，保留 {keep_count} 条最新记录"}
+
+
+def user_to_dict(user):
+    """将用户对象转换为字典"""
+    if not user:
+        return None
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+        "created_at": user.created_at,
+        "updated_at": user.updated_at,
+    }

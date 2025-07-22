@@ -70,7 +70,6 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
 
     owner: UserInfo
-    last_editor: Optional[UserInfo] = None
     collaborators: List[CollaboratorResponse] = []
 
     # 当前用户权限
@@ -107,8 +106,10 @@ class DocumentListResponse(BaseModel):
 class DocumentListResult(BaseModel):
     """文档列表结果"""
 
-    items: List[DocumentListItem]
+    documents: List[DocumentListItem]
     total: int
+    skip: int
+    limit: int
 
 
 class DocumentVersionResponse(BaseModel):
