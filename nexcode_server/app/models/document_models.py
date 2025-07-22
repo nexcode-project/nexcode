@@ -49,6 +49,7 @@ class Document(Base):
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    last_editor_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 最后编辑者
 
     # 文档属性
     category = Column(String(100), nullable=True)
@@ -63,7 +64,8 @@ class Document(Base):
     )
 
     # 关系
-    owner = relationship("User", back_populates="owned_documents")
+    owner = relationship("User", foreign_keys=[owner_id], back_populates="owned_documents")
+    last_editor = relationship("User", foreign_keys=[last_editor_id])
     collaborators = relationship("DocumentCollaborator", back_populates="document")
     operations = relationship("DocumentOperation", back_populates="document")
 

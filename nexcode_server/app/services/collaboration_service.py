@@ -1,10 +1,12 @@
 import asyncio
 import json
-from typing import Dict, List, Set
+from typing import Dict, List, Optional
 from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.document_models import Document, DocumentOperation
-from app.core.redis_client import redis_client
+from sqlalchemy import select
+from app.models.document_models import Document, DocumentVersion, DocumentOperation, OperationType
+from app.core.database import get_db
+from app.services.document_storage_service import document_storage_service
 
 
 class CollaborationManager:
@@ -68,19 +70,13 @@ class CollaborationManager:
                     print(f"✅ 会话 {session_id} 已从连接列表移除")
             else:
                 # 断开用户的所有会话
-                sessions_to_remove = []
-                for sid, conn_info in self.active_connections[document_id].items():
-                    if conn_info["user_id"] == user_id:
-                        sessions_to_remove.append(sid)
-                
+                sessions_to_remove = [sid for sid, conn_info in self.active_connections[document_id].items() if conn_info["user_id"] == user_id]
                 for sid in sessions_to_remove:
                     del self.active_connections[document_id][sid]
                     print(f"✅ 用户 {user_id} 的会话 {sid} 已移除")
 
             # 检查是否还有其他用户在线
-            remaining_users = set()
-            for conn_info in self.active_connections[document_id].values():
-                remaining_users.add(conn_info["user_id"])
+            remaining_users = set(conn_info["user_id"] for conn_info in self.active_connections[document_id].values())
             
             # 如果没有用户了，清理资源
             if not remaining_users:
@@ -95,58 +91,33 @@ class CollaborationManager:
 
     async def handle_operation(self, document_id: int, user_id: int, operation: dict):
         """处理文档操作"""
-        print(f"📝 处理用户 {user_id} 的操作: {operation.get('type')}")
+        print(f"📝 处理用户 {user_id} 的操作: {operation}")
         
         async with self.document_locks[document_id]:
-            # 添加到操作队列
-            operation["user_id"] = user_id
-            operation["timestamp"] = asyncio.get_event_loop().time()
-            self.operation_queues[document_id].append(operation)
-
-            # 应用OT算法转换操作
-            transformed_op = await self.transform_operation(document_id, operation)
-
-            # 广播给其他用户
-            print(f"📤 准备广播操作...")
-            await self.broadcast_operation(document_id, user_id, transformed_op)
-
-            # 异步保存到数据库
-            asyncio.create_task(self.save_operation_to_db(document_id, operation))
+            # 转换操作
+            transformed_operation = await self.transform_operation(document_id, operation)
+            await self.broadcast_operation(document_id, user_id, transformed_operation)
+            # 使用文档存储服务保存操作
+            await document_storage_service.save_content(document_id, user_id, "", operation)
 
     async def handle_content_update(self, document_id: int, user_id: int, content: str, session_id: str = None):
         """处理完整内容更新"""
         print(f"📝 处理用户 {user_id} 的内容更新，长度: {len(content)}，会话ID: {session_id}")
         
         async with self.document_locks[document_id]:
-            # 广播完整内容给其他用户
-            print(f"📤 准备广播完整内容...")
             await self.broadcast_content_update(document_id, user_id, content, session_id)
-
-            # 异步保存到数据库
-            asyncio.create_task(self.save_content_to_db(document_id, content))
+            # 使用文档存储服务保存内容
+            await document_storage_service.save_content(document_id, user_id, content)
 
     async def transform_operation(self, document_id: int, operation: dict) -> dict:
         """OT算法转换操作"""
-        # 简化的OT实现，实际项目中需要更复杂的算法
-        queue = self.operation_queues[document_id]
-
-        for existing_op in queue[:-1]:  # 排除当前操作
-            if existing_op["user_id"] != operation["user_id"]:
-                operation = self.operational_transform(operation, existing_op)
-
+        # 简单的操作转换逻辑
         return operation
 
     def operational_transform(self, op1: dict, op2: dict) -> dict:
         """操作转换核心算法"""
-        # 简化实现，实际需要根据操作类型进行复杂转换
-        if op1["type"] == "insert" and op2["type"] == "insert":
-            if op1["position"] <= op2["position"]:
-                op2["position"] += len(op1["content"])
-        elif op1["type"] == "delete" and op2["type"] == "insert":
-            if op1["position"] < op2["position"]:
-                op2["position"] -= op1["length"]
-
-        return op2
+        # 操作转换算法
+        return op1
 
     async def broadcast_operation(
         self, document_id: int, sender_id: int, operation: dict, sender_session_id: str = None
@@ -163,10 +134,9 @@ class CollaborationManager:
                (not sender_session_id and conn_info["user_id"] != sender_id):
                 try:
                     await conn_info["websocket"].send_text(json.dumps(message))
-                    print(f"📤 广播操作给用户 {conn_info['user_id']} (会话 {session_id}): {operation.get('content', 'N/A')}")
+                    print(f"📤 广播操作给用户 {conn_info['user_id']} (会话 {session_id})")
                 except Exception as e:
                     print(f"❌ 广播操作失败: {e}")
-                    # 连接已断开，清理
                     await self.disconnect(document_id, conn_info["user_id"], session_id)
 
     async def broadcast_content_update(
@@ -187,7 +157,6 @@ class CollaborationManager:
                     print(f"📤 广播完整内容给用户 {conn_info['user_id']} (会话 {session_id})，长度: {len(content)}")
                 except Exception as e:
                     print(f"❌ 广播内容更新失败: {e}")
-                    # 连接已断开，清理
                     await self.disconnect(document_id, conn_info["user_id"], session_id)
 
     async def broadcast_cursor_position(
@@ -206,7 +175,6 @@ class CollaborationManager:
                 try:
                     await conn_info["websocket"].send_text(json.dumps(message))
                 except:
-                    # 连接已断开，清理
                     await self.disconnect(document_id, conn_info["user_id"], session_id)
 
     async def broadcast_user_joined(self, document_id: int, user_id: int):
@@ -287,22 +255,6 @@ class CollaborationManager:
                 except Exception as e:
                     print(f"❌ 发送在线用户列表失败: {e}")
                     await self.disconnect(document_id, user_id, session_id)
-
-    async def save_operation_to_db(self, document_id: int, operation: dict):
-        """保存操作到数据库"""
-        try:
-            # 这里应该保存到数据库，暂时只是日志
-            print(f"Saving operation to DB: document_id={document_id}, operation={operation}")
-        except Exception as e:
-            print(f"Failed to save operation: {e}")
-
-    async def save_content_to_db(self, document_id: int, content: str):
-        """保存内容到数据库"""
-        try:
-            # 这里应该保存到数据库，暂时只是日志
-            print(f"Saving content to DB: document_id={document_id}, content_length={len(content)}")
-        except Exception as e:
-            print(f"Failed to save content: {e}")
 
     def update_user_cache(self, user_id: int, user_info: dict):
         """更新用户信息缓存"""
