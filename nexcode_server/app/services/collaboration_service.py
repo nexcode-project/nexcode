@@ -106,7 +106,7 @@ class CollaborationManager:
         
         async with self.document_locks[document_id]:
             await self.broadcast_content_update(document_id, user_id, content, session_id)
-            # 使用文档存储服务保存内容
+            # 使用文档存储服务保存内容（智能保存策略）
             await document_storage_service.save_content(document_id, user_id, content)
 
     async def transform_operation(self, document_id: int, operation: dict) -> dict:

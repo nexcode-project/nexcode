@@ -4,10 +4,11 @@
 """
 
 import asyncio
+import re
 from typing import Optional, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.core.database import get_db
 from app.models.document_models import (
@@ -26,6 +27,14 @@ class DocumentStorageService:
         self.save_queue = asyncio.Queue()
         self.save_task = None
         self._initialized = False
+        
+        # 保存策略配置
+        self.save_interval = 10.0  # 10秒保存間隔
+        self.min_content_change = 10  # 最小內容變化字符數
+        self.sentence_endings = ['.', '!', '?', '。', '！', '？', '\n']  # 句子結束標記
+        
+        # 文檔狀態追蹤
+        self.document_states = {}  # {document_id: {"last_save": timestamp, "last_content": str, "pending_saves": []}}
     
     def _ensure_initialized(self):
         """确保服务已初始化"""
@@ -54,8 +63,13 @@ class DocumentStorageService:
                 
                 document_id, user_id, content, operation = save_request
                 
-                # 执行保存
-                await self._save_document_content(document_id, user_id, content)
+                # 检查是否需要保存
+                if self._should_save_document(document_id, content):
+                    # 执行保存
+                    await self._save_document_content(document_id, user_id, content)
+                    
+                    # 更新文檔狀態
+                    self._update_document_state(document_id, content)
                 
                 # 如果有操作记录，也保存
                 if operation:
@@ -68,6 +82,53 @@ class DocumentStorageService:
                 print(f"❌ 后台保存失败: {e}")
                 import traceback
                 traceback.print_exc()
+    
+    def _should_save_document(self, document_id: int, content: str) -> bool:
+        """判断是否需要保存文档"""
+        if document_id not in self.document_states:
+            # 新文档，需要保存
+            return True
+        
+        state = self.document_states[document_id]
+        current_time = datetime.utcnow()
+        
+        # 检查时间间隔（10秒）
+        if (current_time - state["last_save"]).total_seconds() >= self.save_interval:
+            print(f"📝 文档 {document_id} 达到保存时间间隔，触发保存")
+            return True
+        
+        # 检查内容变化
+        if state["last_content"] != content:
+            content_diff = abs(len(content) - len(state["last_content"]))
+            
+            # 如果内容变化超过最小阈值
+            if content_diff >= self.min_content_change:
+                print(f"📝 文档 {document_id} 内容变化 {content_diff} 字符，触发保存")
+                return True
+            
+            # 检查是否完成了一个句子
+            if self._is_sentence_complete(state["last_content"], content):
+                print(f"📝 文档 {document_id} 完成句子，触发保存")
+                return True
+        
+        return False
+    
+    def _is_sentence_complete(self, old_content: str, new_content: str) -> bool:
+        """检查是否完成了一个句子"""
+        if len(new_content) <= len(old_content):
+            return False
+        
+        # 检查新增的内容是否以句子结束标记结尾
+        added_content = new_content[len(old_content):]
+        return any(added_content.rstrip().endswith(ending) for ending in self.sentence_endings)
+    
+    def _update_document_state(self, document_id: int, content: str):
+        """更新文档状态"""
+        self.document_states[document_id] = {
+            "last_save": datetime.utcnow(),
+            "last_content": content,
+            "pending_saves": []
+        }
     
     async def save_content(self, document_id: int, user_id: int, content: str, operation: Optional[Dict] = None):
         """保存文档内容（异步）"""
