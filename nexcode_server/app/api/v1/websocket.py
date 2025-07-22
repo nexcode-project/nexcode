@@ -87,7 +87,7 @@ async def websocket_collaborate(
         
         # 连接到协作管理器
         logger.info(f"连接到协作管理器...")
-        await collaboration_manager.connect(websocket, document_id, user_id)
+        session_id = await collaboration_manager.connect(websocket, document_id, user_id)
         
         logger.info(f"User {user.username} connected to document {document_id}")
         
@@ -128,7 +128,7 @@ async def websocket_collaborate(
                     logger.info(f"处理内容更新消息...")
                     # 处理完整内容更新
                     await collaboration_manager.handle_content_update(
-                        document_id, user_id, message.get("content", "")
+                        document_id, user_id, message.get("content", ""), session_id
                     )
                     
                 elif message.get("type") == "cursor":
@@ -162,8 +162,8 @@ async def websocket_collaborate(
     finally:
         # 清理连接
         if user_id and document_id:
-            await collaboration_manager.disconnect(document_id, user_id)
-            logger.info(f"User {user_id} disconnected from document {document_id}")
+            await collaboration_manager.disconnect(document_id, user_id, session_id)
+            logger.info(f"User {user_id} disconnected from document {document_id}, session {session_id}")
 
 
 # 添加一个简单的HTTP端点来测试路由
