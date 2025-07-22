@@ -31,6 +31,7 @@ export function CollaborativeEditor({
   const [content, setContent] = useState(initialContent);
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
   const [isEditing, setIsEditing] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // 防抖处理
   const debounceTimer = useRef<NodeJS.Timeout>();
@@ -106,24 +107,19 @@ export function CollaborativeEditor({
     setContent(newContent);
     onContentChange?.(newContent);
 
-    // 计算操作差异
-    const operation = calculateOperation(lastSentContent.current, newContent);
-
-    if (!operation) return;
-
-    // 防抖发送操作
+    // 防抖发送完整内容
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
 
     debounceTimer.current = setTimeout(() => {
       sendMessage({
-        type: 'operation',
-        operation
+        type: 'content_update',
+        content: newContent
       });
       lastSentContent.current = newContent;
-    }, 300);
-  }, [calculateOperation, sendMessage, onContentChange]);
+    }, 500); // 增加防抖时间，避免频繁发送
+  }, [sendMessage, onContentChange]);
 
   // 应用远程操作
   const applyRemoteOperation = useCallback((operation: Operation) => {
@@ -161,8 +157,25 @@ export function CollaborativeEditor({
       const message = JSON.parse(lastMessage.data);
 
       switch (message.type) {
+        case 'connected':
+          // 设置当前用户信息
+          setCurrentUser(message.user);
+          break;
         case 'operation':
           applyRemoteOperation(message.operation);
+          break;
+        case 'content_update':
+          // 处理完整内容更新
+          if (message.sender_id !== currentUser?.id) { // 避免自己发送的内容更新自己
+            setContent(message.content);
+            lastSentContent.current = message.content;
+            onContentChange?.(message.content);
+            
+            // 更新编辑器内容
+            if (editorRef.current && !isEditing) {
+              editorRef.current.innerHTML = message.content;
+            }
+          }
           break;
         case 'user_joined':
           setOnlineUsers(prev => {
@@ -259,7 +272,7 @@ export function CollaborativeEditor({
           onFocus={handleFocus}
           onBlur={handleBlur}
           dangerouslySetInnerHTML={{ __html: content }}
-          placeholder="开始输入文档内容..."
+          data-placeholder="开始输入文档内容..."
         />
       </div>
     </div>

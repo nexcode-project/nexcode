@@ -84,6 +84,18 @@ class CollaborationManager:
             # 异步保存到数据库
             asyncio.create_task(self.save_operation_to_db(document_id, operation))
 
+    async def handle_content_update(self, document_id: int, user_id: int, content: str):
+        """处理完整内容更新"""
+        print(f"📝 处理用户 {user_id} 的内容更新，长度: {len(content)}")
+        
+        async with self.document_locks[document_id]:
+            # 广播完整内容给其他用户
+            print(f"📤 准备广播完整内容...")
+            await self.broadcast_content_update(document_id, user_id, content)
+
+            # 异步保存到数据库
+            asyncio.create_task(self.save_content_to_db(document_id, content))
+
     async def transform_operation(self, document_id: int, operation: dict) -> dict:
         """OT算法转换操作"""
         # 简化的OT实现，实际项目中需要更复杂的算法
@@ -117,13 +129,33 @@ class CollaborationManager:
         message = {"type": "operation", "operation": operation, "sender_id": sender_id}
 
         for user_id, websocket in self.active_connections[document_id].items():
-            try:
-                await websocket.send_text(json.dumps(message))
-                print(f"📤 广播操作给用户 {user_id}: {operation.get('content', 'N/A')}")
-            except Exception as e:
-                print(f"❌ 广播操作失败: {e}")
-                # 连接已断开，清理
-                await self.disconnect(document_id, user_id)
+            if user_id != sender_id:
+                try:
+                    await websocket.send_text(json.dumps(message))
+                    print(f"📤 广播操作给用户 {user_id}: {operation.get('content', 'N/A')}")
+                except Exception as e:
+                    print(f"❌ 广播操作失败: {e}")
+                    # 连接已断开，清理
+                    await self.disconnect(document_id, user_id)
+
+    async def broadcast_content_update(
+        self, document_id: int, sender_id: int, content: str
+    ):
+        """广播完整内容更新给其他用户"""
+        if document_id not in self.active_connections:
+            return
+
+        message = {"type": "content_update", "content": content, "sender_id": sender_id}
+
+        for user_id, websocket in self.active_connections[document_id].items():
+            if user_id != sender_id:
+                try:
+                    await websocket.send_text(json.dumps(message))
+                    print(f"📤 广播完整内容给用户 {user_id}，长度: {len(content)}")
+                except Exception as e:
+                    print(f"❌ 广播内容更新失败: {e}")
+                    # 连接已断开，清理
+                    await self.disconnect(document_id, user_id)
 
     async def broadcast_cursor_position(
         self, document_id: int, user_id: int, position: dict
@@ -223,6 +255,14 @@ class CollaborationManager:
             print(f"Saving operation to DB: document_id={document_id}, operation={operation}")
         except Exception as e:
             print(f"Failed to save operation: {e}")
+
+    async def save_content_to_db(self, document_id: int, content: str):
+        """保存内容到数据库"""
+        try:
+            # 这里应该保存到数据库，暂时只是日志
+            print(f"Saving content to DB: document_id={document_id}, content_length={len(content)}")
+        except Exception as e:
+            print(f"Failed to save content: {e}")
 
     def update_user_cache(self, user_id: int, user_info: dict):
         """更新用户信息缓存"""

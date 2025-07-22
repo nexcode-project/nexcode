@@ -124,6 +124,13 @@ async def websocket_collaborate(
                         document_id, user_id, message.get("operation", {})
                     )
                     
+                elif message.get("type") == "content_update":
+                    logger.info(f"处理内容更新消息...")
+                    # 处理完整内容更新
+                    await collaboration_manager.handle_content_update(
+                        document_id, user_id, message.get("content", "")
+                    )
+                    
                 elif message.get("type") == "cursor":
                     logger.info(f"处理光标消息...")
                     # 处理光标位置
