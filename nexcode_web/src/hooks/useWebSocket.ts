@@ -6,6 +6,7 @@ interface UseWebSocketOptions {
   onError?: (error: Event) => void;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
+  token?: string; // 添加 token 参数
 }
 
 export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
@@ -20,12 +21,15 @@ export function useWebSocket(url: string, options: UseWebSocketOptions = {}) {
     onClose,
     onError,
     reconnectInterval = 3000,
-    maxReconnectAttempts = 5
+    maxReconnectAttempts = 5,
+    token
   } = options;
 
   const connect = () => {
     try {
-      ws.current = new WebSocket(url);
+      // 构建带 token 的 URL
+      const wsUrl = token ? `${url}?token=${token}` : url;
+      ws.current = new WebSocket(wsUrl);
       setConnectionStatus('Connecting');
 
       ws.current.onopen = () => {

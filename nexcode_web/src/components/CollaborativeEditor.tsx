@@ -22,23 +22,27 @@ interface CollaborativeEditorProps {
   onContentChange?: (content: string) => void;
 }
 
-export function CollaborativeEditor({ 
-  documentId, 
-  initialContent = '', 
-  onContentChange 
+export function CollaborativeEditor({
+  documentId,
+  initialContent = '',
+  onContentChange
 }: CollaborativeEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [content, setContent] = useState(initialContent);
   const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
   const [isEditing, setIsEditing] = useState(false);
-  
+
   // 防抖处理
   const debounceTimer = useRef<NodeJS.Timeout>();
   const lastSentContent = useRef(initialContent);
-  
+
+  // 获取 token
+  const token = typeof window !== 'undefined' ? localStorage.getItem('session_token') : null;
+
   const wsUrl = `ws://localhost:8000/v1/documents/${documentId}/collaborate`;
-  
+
   const { sendMessage, lastMessage, connectionStatus } = useWebSocket(wsUrl, {
+    token: token || undefined, // 传递 token
     onOpen: () => {
       toast.success('已连接到协作服务');
     },
@@ -53,23 +57,23 @@ export function CollaborativeEditor({
   // 计算操作差异
   const calculateOperation = useCallback((oldContent: string, newContent: string): Operation | null => {
     if (oldContent === newContent) return null;
-    
+
     // 找到第一个不同的位置
     let start = 0;
-    while (start < Math.min(oldContent.length, newContent.length) && 
-           oldContent[start] === newContent[start]) {
+    while (start < Math.min(oldContent.length, newContent.length) &&
+      oldContent[start] === newContent[start]) {
       start++;
     }
-    
+
     // 找到最后一个不同的位置
     let oldEnd = oldContent.length;
     let newEnd = newContent.length;
-    while (oldEnd > start && newEnd > start && 
-           oldContent[oldEnd - 1] === newContent[newEnd - 1]) {
+    while (oldEnd > start && newEnd > start &&
+      oldContent[oldEnd - 1] === newContent[newEnd - 1]) {
       oldEnd--;
       newEnd--;
     }
-    
+
     // 确定操作类型
     if (oldEnd === start && newEnd > start) {
       // 插入操作
@@ -93,7 +97,7 @@ export function CollaborativeEditor({
         content: newContent.slice(start, newEnd)
       };
     }
-    
+
     return null;
   }, []);
 
@@ -101,17 +105,17 @@ export function CollaborativeEditor({
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
     onContentChange?.(newContent);
-    
+
     // 计算操作差异
     const operation = calculateOperation(lastSentContent.current, newContent);
-    
+
     if (!operation) return;
-    
+
     // 防抖发送操作
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
     }
-    
+
     debounceTimer.current = setTimeout(() => {
       sendMessage({
         type: 'operation',
@@ -125,24 +129,24 @@ export function CollaborativeEditor({
   const applyRemoteOperation = useCallback((operation: Operation) => {
     setContent(prevContent => {
       let newContent = prevContent;
-      
+
       switch (operation.type) {
         case 'insert':
-          newContent = prevContent.slice(0, operation.position) + 
-                      (operation.content || '') + 
-                      prevContent.slice(operation.position);
+          newContent = prevContent.slice(0, operation.position) +
+            (operation.content || '') +
+            prevContent.slice(operation.position);
           break;
         case 'delete':
-          newContent = prevContent.slice(0, operation.position) + 
-                      prevContent.slice(operation.position + (operation.length || 0));
+          newContent = prevContent.slice(0, operation.position) +
+            prevContent.slice(operation.position + (operation.length || 0));
           break;
       }
-      
+
       // 更新编辑器内容
       if (editorRef.current && !isEditing) {
         editorRef.current.innerHTML = newContent;
       }
-      
+
       lastSentContent.current = newContent;
       onContentChange?.(newContent);
       return newContent;
@@ -152,10 +156,10 @@ export function CollaborativeEditor({
   // 处理WebSocket消息
   useEffect(() => {
     if (!lastMessage) return;
-    
+
     try {
       const message = JSON.parse(lastMessage.data);
-      
+
       switch (message.type) {
         case 'operation':
           applyRemoteOperation(message.operation);

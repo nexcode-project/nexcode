@@ -35,7 +35,7 @@ export default function Documents() {
   const fetchDocuments = async () => {
     try {
       const response = await api.get('/v1/documents');
-      setDocuments(response.data);
+      setDocuments(response.data.documents);
     } catch (error) {
       console.error('Failed to fetch documents:', error);
       toast.error('获取文档列表失败');
