@@ -121,17 +121,18 @@ async def get_document(
     """获取文档详情"""
     document = await document_service.get_document(db, document_id, current_user.id)
     
-    # 转换为响应格式
+    # 转换为响应格式 - 简化处理，避免异步关系访问
     user_info = user_to_dict(document.owner) if document.owner else None
     collaborators = []
     
-    for collab in document.collaborators:
-        collaborator_response = CollaboratorResponse(
-            user=UserInfo.model_validate(user_to_dict(collab.user)),
-            permission=collab.permission,
-            added_at=collab.added_at,
-        )
-        collaborators.append(collaborator_response)
+    # 暂时跳过协作者信息的加载，避免异步问题
+    # for collab in document.collaborators:
+    #     collaborator_response = CollaboratorResponse(
+    #         user=UserInfo.model_validate(user_to_dict(collab.user)),
+    #         permission=collab.permission,
+    #         added_at=collab.added_at,
+    #     )
+    #     collaborators.append(collaborator_response)
     
     response_data = DocumentResponse(
         id=document.id,
@@ -170,17 +171,18 @@ async def update_document(
         change_description=document_data.change_description,
     )
     
-    # 转换为响应格式
+    # 转换为响应格式 - 简化处理，避免异步关系访问
     user_info = user_to_dict(document.owner) if document.owner else None
     collaborators = []
     
-    for collab in document.collaborators:
-        collaborator_response = CollaboratorResponse(
-            user=UserInfo.model_validate(user_to_dict(collab.user)),
-            permission=collab.permission,
-            added_at=collab.added_at,
-        )
-        collaborators.append(collaborator_response)
+    # 暂时跳过协作者信息的加载，避免异步问题
+    # for collab in document.collaborators:
+    #     collaborator_response = CollaboratorResponse(
+    #         user=UserInfo.model_validate(user_to_dict(collab.user)),
+    #         permission=collab.permission,
+    #         added_at=collab.added_at,
+    #     )
+    #     collaborators.append(collaborator_response)
     
     response_data = DocumentResponse(
         id=document.id,

@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
 import { api } from '@/lib/api';
-import { Plus, FileText, Users, Edit, Trash2 } from 'lucide-react';
+import { Plus, FileText, Users, Edit, Trash2, ExternalLink } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Document {
@@ -124,6 +124,13 @@ export default function Documents() {
                       </h3>
                       <div className="flex items-center space-x-1">
                         <button
+                          onClick={() => router.push(`/documents/${doc.id}/edit`)}
+                          className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-100"
+                          title="全屏编辑"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </button>
+                        <button
                           onClick={() => router.push(`/documents/${doc.id}/collaborate`)}
                           className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-100"
                           title="协作编辑"
@@ -156,6 +163,13 @@ export default function Documents() {
                   
                   <div className="px-6 py-3 bg-gray-50 border-t flex items-center justify-between">
                     <button
+                      onClick={() => router.push(`/documents/${doc.id}/edit`)}
+                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>全屏编辑</span>
+                    </button>
+                    <button
                       onClick={() => router.push(`/documents/${doc.id}/collaborate`)}
                       className="flex items-center space-x-2 text-primary-600 hover:text-primary-700 font-medium"
                     >
@@ -169,6 +183,6 @@ export default function Documents() {
           )}
         </div>
       </div>
-    </>
-  );
-}
+          </>
+    );
+  }

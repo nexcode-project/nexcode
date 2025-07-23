@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
-import { CollaborativeEditor } from '@/components/CollaborativeEditor';
+import { MarkdownEditor } from '@/components/MarkdownEditor';
 import { api } from '@/lib/api';
 import { ArrowLeft, Save, Share2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -155,15 +155,13 @@ export default function DocumentCollaborate() {
         </div>
 
         {/* 协作编辑器 */}
-        <div className="max-w-7xl mx-auto">
-          <CollaborativeEditor
-            documentId={document.id}
-            initialContent={document.content}
-            onContentChange={(content) => {
-              setDocument(prev => prev ? { ...prev, content } : null);
-            }}
-          />
-        </div>
+        <MarkdownEditor
+          documentId={document.id}
+          initialContent={document.content}
+          onContentChange={(content: string) => {
+            setDocument(prev => prev ? { ...prev, content } : null);
+          }}
+        />
       </div>
     </>
   );
