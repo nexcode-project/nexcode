@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+import difflib
 
 from app.core.dependencies import CurrentUser, DatabaseSession
 from app.services.document_service import document_service
@@ -27,6 +28,21 @@ from app.models.document_schemas import (
 
 class VersionSnapshotRequest(BaseModel):
     description: str
+    content: Optional[str] = None  # 添加content字段
+
+
+class VersionDiffResponse(BaseModel):
+    from_version: int
+    to_version: int
+    diff_html: str
+    diff_text: str
+
+
+class VersionRestoreResponse(BaseModel):
+    success: bool
+    content: str
+    version_number: int
+    message: str
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -265,11 +281,20 @@ async def create_version_snapshot(
             status_code=status.HTTP_403_FORBIDDEN, detail="无权限编辑此文档"
         )
     
-    await document_storage_service.create_version_snapshot(document_id, current_user.id, request.description)
+    # 如果请求中包含内容，使用提供的内容创建版本
+    if request.content is not None:
+        await document_storage_service.create_version_snapshot_with_content(
+            document_id, current_user.id, request.description, request.content
+        )
+    else:
+        await document_storage_service.create_version_snapshot(
+            document_id, current_user.id, request.description
+        )
+    
     return {"message": "版本快照已创建"}
 
 
-@router.post("/{document_id}/versions/{version_number}/restore")
+@router.post("/{document_id}/versions/{version_number}/restore", response_model=VersionRestoreResponse)
 async def restore_version(
     document_id: int,
     version_number: int,
@@ -286,13 +311,77 @@ async def restore_version(
             status_code=status.HTTP_403_FORBIDDEN, detail="无权限编辑此文档"
         )
     
-    success = await document_storage_service.restore_version(document_id, version_number, current_user.id)
-    if success:
-        return {"message": f"已恢复到版本 {version_number}"}
+    result = await document_storage_service.restore_version_with_content(
+        document_id, version_number, current_user.id
+    )
+    
+    if result and result.get("success"):
+        return VersionRestoreResponse(
+            success=True,
+            content=result["content"],
+            version_number=result["new_version"],
+            message=f"已恢复到版本 {version_number}"
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在"
         )
+
+
+@router.get("/{document_id}/versions/{from_version}/diff/{to_version}", response_model=VersionDiffResponse)
+async def get_version_diff(
+    document_id: int,
+    from_version: int,
+    to_version: int,
+    current_user: CurrentUser,
+    db: DatabaseSession
+):
+    """获取两个版本之间的差异"""
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.READER
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限查看版本差异"
+        )
+    
+    # 获取两个版本的内容
+    from_content = await document_storage_service.get_version_content(document_id, from_version)
+    to_content = await document_storage_service.get_version_content(document_id, to_version)
+    
+    if from_content is None or to_content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="指定版本不存在"
+        )
+    
+    # 生成文本差异
+    diff_lines = list(difflib.unified_diff(
+        from_content.splitlines(keepends=True),
+        to_content.splitlines(keepends=True),
+        fromfile=f"版本 {from_version}",
+        tofile=f"版本 {to_version}",
+        n=3
+    ))
+    diff_text = ''.join(diff_lines)
+    
+    # 生成HTML差异
+    html_diff = difflib.HtmlDiff()
+    diff_html = html_diff.make_file(
+        from_content.splitlines(),
+        to_content.splitlines(),
+        fromdesc=f"版本 {from_version}",
+        todesc=f"版本 {to_version}",
+        context=True,
+        numlines=2
+    )
+    
+    return VersionDiffResponse(
+        from_version=from_version,
+        to_version=to_version,
+        diff_html=diff_html,
+        diff_text=diff_text
+    )
 
 
 @router.get("/{document_id}/statistics")

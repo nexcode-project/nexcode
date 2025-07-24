@@ -12,7 +12,7 @@ import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeNode, CodeHighlightNode } from '@lexical/code';
 import { LinkNode, AutoLinkNode } from '@lexical/link';
-import { Eye, EyeOff, Save, Wifi, WifiOff, Users, RefreshCw, Clock } from 'lucide-react';
+import { Eye, EyeOff, Save, Wifi, WifiOff, Users, RefreshCw, Clock, History, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -123,7 +123,6 @@ function RealtimeSyncPlugin({
   syncInterval: number;
 }) {
   const [editor] = useLexicalComposerContext();
-  const syncTimer = useRef<NodeJS.Timeout>();
 
   // 定期同步功能
   useEffect(() => {
@@ -219,6 +218,67 @@ function AutoSavePlugin({
   return null;
 }
 
+// 智能版本管理插件
+function SmartVersioningPlugin({
+  content,
+  onCreateVersion,
+  versionDelay = 60000 // 1分钟
+}: {
+  content: string;
+  onCreateVersion: (content: string) => Promise<void>;
+  versionDelay?: number;
+}) {
+  const versionTimer = useRef<NodeJS.Timeout>();
+  const lastVersionContent = useRef<string>('');
+  const isUserEditing = useRef<boolean>(false);
+
+  useEffect(() => {
+    // 如果内容没有变化，跳过
+    if (!content || content === lastVersionContent.current) {
+      return;
+    }
+
+    isUserEditing.current = true;
+
+    // 清除之前的定时器
+    if (versionTimer.current) {
+      clearTimeout(versionTimer.current);
+    }
+
+    // 设置新的定时器，在用户停止编辑后创建版本
+    versionTimer.current = setTimeout(async () => {
+      if (isUserEditing.current && content !== lastVersionContent.current) {
+        try {
+          await onCreateVersion(content);
+          lastVersionContent.current = content;
+          isUserEditing.current = false;
+        } catch (error) {
+          console.error('Auto version creation failed:', error);
+        }
+      }
+    }, versionDelay);
+
+    return () => {
+      if (versionTimer.current) {
+        clearTimeout(versionTimer.current);
+      }
+    };
+  }, [content, onCreateVersion, versionDelay]);
+
+  return null;
+}
+
+// 版本历史接口
+interface DocumentVersion {
+  id: number;
+  version_number: number;
+  title: string;
+  content: string;
+  changed_by: number;
+  change_description: string;
+  created_at: string;
+}
+
 interface CollaborativeLexicalEditorProps {
   documentId: number;
   initialContent?: string;
@@ -243,6 +303,9 @@ export function CollaborativeLexicalEditor({
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [syncInterval, setSyncInterval] = useState(5000); // 5秒同步一次
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [versionHistory, setVersionHistory] = useState<DocumentVersion[]>([]);
+  const [smartVersioningEnabled, setSmartVersioningEnabled] = useState(true);
   
   const sharedbClientRef = useRef<ShareDBClient>();
   const editorRef = useRef<any>();
@@ -255,14 +318,35 @@ export function CollaborativeLexicalEditor({
     // 加载文档状态
     const loadDocument = async () => {
       try {
+        // 首先尝试从ShareDB获取最新状态
         const docState = await client.getDocument();
+        console.log('Loaded document from ShareDB:', docState);
+        
         setDocumentState(docState);
-        setContent(docState.content);
+        
+        // 使用ShareDB中的最新内容，而不是初始内容
+        if (docState.content && docState.content !== initialContent) {
+          setContent(docState.content);
+          console.log('Using ShareDB content instead of initial content');
+        } else {
+          setContent(initialContent);
+        }
+        
         setIsLoading(false);
         setLastSyncTime(new Date());
+        
+        // 立即执行一次同步以确保获取最新状态
+        const syncResult = await client.syncDocument(docState.content);
+        if (syncResult.success && syncResult.content !== docState.content) {
+          setContent(syncResult.content);
+          setDocumentState(prev => prev ? { ...prev, content: syncResult.content, version: syncResult.version } : null);
+          console.log('Synced to latest content:', syncResult.content);
+        }
+        
       } catch (error) {
         console.error('Failed to load document:', error);
-        toast.error('加载文档失败');
+        toast.error('加载文档失败，使用本地版本');
+        setContent(initialContent);
         setIsOnline(false);
         setIsLoading(false);
       }
@@ -273,7 +357,7 @@ export function CollaborativeLexicalEditor({
     return () => {
       client.destroy();
     };
-  }, [documentId]);
+  }, [documentId, initialContent]);
 
   // 编辑器初始配置
   const initialConfig = {
@@ -351,6 +435,78 @@ export function CollaborativeLexicalEditor({
     }
   }, [content, onSave, isOnline]);
 
+  // 创建版本
+  const handleCreateVersion = useCallback(async (versionContent: string) => {
+    try {
+      const response = await fetch(`/api/v1/documents/${documentId}/versions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          content: versionContent,
+          change_description: '自动版本保存'
+        })
+      });
+
+      if (response.ok) {
+        console.log('Version created successfully');
+        // 刷新版本历史
+        loadVersionHistory();
+      }
+    } catch (error) {
+      console.error('Failed to create version:', error);
+    }
+  }, [documentId]);
+
+  // 加载版本历史
+  const loadVersionHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/v1/documents/${documentId}/versions`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setVersionHistory(data.versions || []);
+      }
+    } catch (error) {
+      console.error('Failed to load version history:', error);
+      toast.error('加载版本历史失败');
+    }
+  }, [documentId]);
+
+  // 恢复版本
+  const handleRestoreVersion = useCallback(async (versionNumber: number) => {
+    try {
+      const response = await fetch(`/api/v1/documents/${documentId}/versions/${versionNumber}/restore`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setContent(data.content);
+        updateEditorContent(data.content);
+        setShowVersionHistory(false);
+        toast.success('版本已恢复');
+        
+        // 同步到ShareDB
+        if (sharedbClientRef.current) {
+          await sharedbClientRef.current.syncDocument(data.content);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to restore version:', error);
+      toast.error('恢复版本失败');
+    }
+  }, [documentId, updateEditorContent]);
+
   // 手动保存按钮
   const handleManualSave = useCallback(() => {
     if (hasUnsavedChanges && !isSaving) {
@@ -400,6 +556,14 @@ export function CollaborativeLexicalEditor({
   const saveEditorRef = useCallback((editor: any) => {
     editorRef.current = editor;
   }, []);
+
+  // 切换版本历史
+  const toggleVersionHistory = useCallback(() => {
+    if (!showVersionHistory) {
+      loadVersionHistory();
+    }
+    setShowVersionHistory(!showVersionHistory);
+  }, [showVersionHistory, loadVersionHistory]);
 
   if (isLoading) {
     return (
@@ -478,7 +642,25 @@ export function CollaborativeLexicalEditor({
               />
               <span className="text-gray-600">自动同步</span>
             </label>
+            <label className="flex items-center space-x-1">
+              <input
+                type="checkbox"
+                checked={smartVersioningEnabled}
+                onChange={(e) => setSmartVersioningEnabled(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-gray-600">智能版本</span>
+            </label>
           </div>
+          
+          <button
+            onClick={toggleVersionHistory}
+            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            title="版本历史"
+          >
+            <History className="h-4 w-4" />
+            <span>历史</span>
+          </button>
           
           <button
             onClick={() => setIsPreviewMode(prev => !prev)}
@@ -517,6 +699,45 @@ export function CollaborativeLexicalEditor({
 
       {/* 主要内容区域 */}
       <div className="flex-1 flex overflow-hidden">
+        {/* 版本历史侧边栏 */}
+        {showVersionHistory && (
+          <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
+            <div className="p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">版本历史</h3>
+            </div>
+            <div className="flex-1 overflow-auto">
+              {versionHistory.length > 0 ? (
+                <div className="p-2">
+                  {versionHistory.map((version) => (
+                    <div
+                      key={version.id}
+                      className="p-3 mb-2 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow cursor-pointer"
+                      onClick={() => handleRestoreVersion(version.version_number)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          版本 {version.version_number}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {new Date(version.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-1">{version.change_description}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {version.content.slice(0, 100)}...
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 text-center text-gray-500">
+                  暂无版本历史
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 编辑器区域 */}
         {!isPreviewMode && (
           <div className="flex-1">
@@ -564,6 +785,15 @@ export function CollaborativeLexicalEditor({
                   saveDelay={1000}
                 />
                 
+                {/* 智能版本管理插件 */}
+                {smartVersioningEnabled && (
+                  <SmartVersioningPlugin
+                    content={content}
+                    onCreateVersion={handleCreateVersion}
+                    versionDelay={60000} // 1分钟
+                  />
+                )}
+                
                 {/* 保存编辑器引用 */}
                 <EditorRefPlugin onRef={saveEditorRef} />
               </div>
@@ -599,6 +829,9 @@ export function CollaborativeLexicalEditor({
           )}
           {autoSaveEnabled && (
             <span className="text-green-600">● 自动保存已启用</span>
+          )}
+          {smartVersioningEnabled && (
+            <span className="text-purple-600">● 智能版本已启用</span>
           )}
         </div>
         <div className="flex items-center space-x-2">
