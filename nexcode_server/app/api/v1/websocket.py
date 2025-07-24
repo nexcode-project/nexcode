@@ -4,9 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.services.collaboration_service import collaboration_manager
 from app.services.permission_service import permission_service
-from app.models.document_models import PermissionLevel
 from app.core.dependencies import get_current_user_ws, get_db
-from app.models.database import User
+from app.models.database import User, PermissionLevel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 

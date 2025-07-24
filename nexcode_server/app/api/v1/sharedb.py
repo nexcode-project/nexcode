@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Annotated
 import logging
 from pydantic import BaseModel
+from datetime import datetime, timedelta
+import hashlib
 
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_db
 from app.services.sharedb_service import get_sharedb_service, ShareDBService
 from app.models.database import User
+from app.services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +18,7 @@ class DocumentSyncRequest(BaseModel):
     doc_id: str
     version: int
     content: str
+    create_version: bool = True  # 新增参数
 
 class OperationRequest(BaseModel):
     doc_id: str
@@ -65,37 +69,31 @@ async def get_document(
 @router.post("/documents/sync", response_model=SyncResponse)
 async def sync_document(
     request: DocumentSyncRequest,
-    current_user: User = Depends(get_current_user),
-    sharedb: ShareDBService = Depends(get_sharedb_service)
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Any, Depends(get_db)]
 ):
-    """同步文档状态"""
+    """同步文档，智能版本控制"""
     try:
-        result = await sharedb.sync_document(
+        # 调用 ShareDB 服务同步
+        result = await get_sharedb_service().sync_document(
             doc_id=request.doc_id,
-            client_version=request.version,
-            client_content=request.content,
-            user_id=current_user.id
+            version=request.version,
+            content=request.content,
+            user_id=current_user.id,
+            create_version=request.create_version,
+            db_session=db
         )
         
-        # 确保响应格式正确
-        sync_response = SyncResponse(
-            success=result.get("success", True),
-            version=result.get("version", 0),
-            content=result.get("content", ""),
-            operations=result.get("operations", []),
-            error=result.get("error")  # 这里会自动处理None值
-        )
-        
-        return sync_response
+        # 返回 SyncResponse 对象
+        return SyncResponse(**result)
     except Exception as e:
-        logger.error(f"Failed to sync document {request.doc_id}: {e}")
-        # 返回错误响应
+        logger.error(f"Sync document failed: {e}")
         return SyncResponse(
             success=False,
-            version=0,
-            content="",
-            operations=[],
-            error=f"同步失败: {str(e)}"
+            error=str(e),
+            content=request.content,
+            version=request.version,
+            operations=[]  # 添加缺失的 operations 字段
         )
 
 @router.post("/documents/operations", response_model=OperationResponse)

@@ -9,6 +9,7 @@ from app.services.document_service import document_service
 from app.services.permission_service import permission_service
 from app.services.auth_service import auth_service
 from app.services.document_storage_service import document_storage_service
+from app.services.sharedb_service import get_sharedb_service
 from app.models.document_schemas import (
     DocumentCreate,
     DocumentListItem,
@@ -135,37 +136,27 @@ async def get_document(
     document_id: int, current_user: CurrentUser, db: DatabaseSession
 ):
     """获取文档详情"""
-    document = await document_service.get_document(db, document_id, current_user.id)
+    # 获取 ShareDB 服务
+    sharedb_service = get_sharedb_service()
     
-    # 转换为响应格式 - 简化处理，避免异步关系访问
-    user_info = user_to_dict(document.owner) if document.owner else None
-    collaborators = []
-    
-    # 暂时跳过协作者信息的加载，避免异步问题
-    # for collab in document.collaborators:
-    #     collaborator_response = CollaboratorResponse(
-    #         user=UserInfo.model_validate(user_to_dict(collab.user)),
-    #         permission=collab.permission,
-    #         added_at=collab.added_at,
-    #     )
-    #     collaborators.append(collaborator_response)
-    
-    response_data = DocumentResponse(
-        id=document.id,
-        title=document.title,
-        content=document.content,
-        category=document.category,
-        tags=document.tags,
-        status=document.status,
-        version=document.version,
-        created_at=document.created_at,
-        updated_at=document.updated_at,
-        owner=UserInfo.model_validate(user_info) if user_info else None,
-        collaborators=collaborators,
-        user_permission=PermissionLevel.READER,  # 根据实际权限设置
+    document_data = await document_service.get_document(
+        db, document_id, current_user.id, sharedb_service
     )
     
-    return response_data
+    # document_data 现在是字典格式，包含来自 ShareDB 的内容
+    return DocumentResponse(
+        id=document_data["id"],
+        title=document_data["title"],
+        content=document_data["content"],  # 来自 ShareDB
+        category=document_data["category"],
+        tags=document_data["tags"],
+        version=document_data["version"],  # 来自 ShareDB
+        owner=user_to_dict(document_data["owner"]) if document_data["owner"] else None,
+        collaborators=[],
+        created_at=document_data["created_at"],
+        updated_at=document_data["updated_at"],
+        status=document_data["status"]
+    )
 
 
 @router.put("/{document_id}", response_model=DocumentResponse)
@@ -177,7 +168,7 @@ async def update_document(
 ):
     """更新文档"""
     document = await document_service.update_document(
-        db=db,
+        db=db,  # 全部使用关键字参数
         document_id=document_id,
         user_id=current_user.id,
         title=document_data.title,
@@ -185,6 +176,7 @@ async def update_document(
         category=document_data.category,
         tags=document_data.tags,
         change_description=document_data.change_description,
+        create_version=True,  # 常规文档更新创建版本
     )
     
     # 转换为响应格式 - 简化处理，避免异步关系访问

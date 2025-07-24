@@ -103,7 +103,8 @@ export class ShareDBClient {
       const response = await api.post('/v1/sharedb/documents/sync', {
         doc_id: this.docId,
         version: this.currentVersion,
-        content: content
+        content: content,
+        create_version: false
       });
       
       const syncResult = response.data as SyncResponse;

@@ -13,50 +13,47 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from app.core.database import AsyncSessionLocal, init_db
-from app.models.database import User, SystemSettings
-from app.models.document_models import Document
+from app.models.database import User, SystemSettings, Document
 from app.services.auth_service import auth_service
 from sqlalchemy import select
 
 
 async def create_admin_user():
-    """创建初始管理员用户"""
-    async with AsyncSessionLocal() as db:
-        # 检查是否已存在管理员用户
-        stmt = select(User).where(User.username == "admin")
-        result = await db.execute(stmt)
-        existing_admin = result.scalar_one_or_none()
+    """创建管理员用户"""
+    try:
+        async with AsyncSessionLocal() as db:
+            # 检查是否已存在管理员用户
+            stmt = select(User).where(User.username == "admin")
+            result = await db.execute(stmt)
+            existing_admin = result.scalar_one_or_none()
 
-        if existing_admin:
-            # 为现有管理员用户添加/更新密码
-            existing_admin.password_hash = auth_service.get_password_hash("admin")
+            if existing_admin:
+                print("✅ 管理员用户已存在")
+                return existing_admin  # 返回现有的管理员用户
+
+            # 创建管理员用户 - 移除 full_name 参数
+            admin_user = User(
+                username="admin",
+                email="admin@nexcode.com",
+                password_hash=auth_service.get_password_hash("admin123"),
+                is_active=True
+            )
+
+            db.add(admin_user)
             await db.commit()
-            print("✅ 管理员用户密码更新成功")
-            print("   用户名: admin")
-            print("   密码: admin")
-            return existing_admin
+            await db.refresh(admin_user)
 
-        # 创建管理员用户
-        password_hash = auth_service.get_password_hash("admin")
-        admin_user = User(
-            username="admin",
-            email="admin@nexcode.local",
-            full_name="系统管理员",
-            password_hash=password_hash,
-            is_superuser=True,
-            is_active=True,
-        )
+            print("✅ 管理员用户创建成功")
+            print(f"   用户名: admin")
+            print(f"   密码: admin123")
+            print(f"   邮箱: admin@nexcode.com")
 
-        db.add(admin_user)
-        await db.commit()
-        await db.refresh(admin_user)
+            return admin_user
 
-        print(f"✅ 管理员用户创建成功")
-        print(f"   ID: {admin_user.id}")
-        print(f"   用户名: {admin_user.username}")
-        print(f"   邮箱: {admin_user.email}")
-        print("   密码: admin")
-        return admin_user
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ 创建管理员用户失败: {e}")
+        raise
 
 
 async def create_demo_user():
@@ -227,6 +224,7 @@ NexCode 是一个现代化的协作文档平台，支持实时协作编辑、版
                 tags=doc_data["tags"],
                 owner_id=doc_data["owner_id"],
                 last_editor_id=doc_data["owner_id"],
+                version=1  # 新文档版本从 1 开始
             )
 
             db.add(document)

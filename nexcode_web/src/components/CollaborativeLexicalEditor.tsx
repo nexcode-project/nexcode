@@ -18,6 +18,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { ShareDBClient, DocumentState } from '@/services/sharedb';
+// 假设导入 authStore，如果项目有
+import { useAuthStore } from '@/store/authStore';  // 如果没有，忽略这行
 
 // 编辑器节点配置
 const editorNodes = [
@@ -173,17 +175,21 @@ function RealtimeSyncPlugin({
   return null;
 }
 
-// 自动保存插件
+// 自动保存插件 - 不创建版本
 function AutoSavePlugin({
-  onSave,
+  documentId,
   content,
   isEnabled,
-  saveDelay = 1000
+  saveDelay = 1000,
+  setDocumentState,
+  documentState
 }: {
-  onSave: (content: string) => Promise<void>;
+  documentId: number;
   content: string;
   isEnabled: boolean;
   saveDelay?: number;
+  setDocumentState: (state: DocumentState | null) => void;
+  documentState: DocumentState | null;
 }) {
   const saveTimer = useRef<NodeJS.Timeout>();
   const lastSavedContent = useRef<string>('');
@@ -193,16 +199,47 @@ function AutoSavePlugin({
       return;
     }
 
-    // 清除之前的定时器
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
     }
 
-    // 设置新的定时器
     saveTimer.current = setTimeout(async () => {
       try {
-        await onSave(content);
-        lastSavedContent.current = content;
+        // 简化：直接使用 localStorage 中的 token
+        const token = localStorage.getItem('token');
+        
+        if (!token) {
+          console.error('No auth token found');
+          return;
+        }
+
+        const response = await fetch('/v1/sharedb/documents/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            doc_id: documentId.toString(),
+            version: documentState?.version || 0,
+            content: content,
+            create_version: false  // 自动保存不创建版本
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          lastSavedContent.current = content;
+          console.log('Auto-saved via ShareDB sync without version creation');
+          
+          if (documentState) {
+            setDocumentState({ ...documentState, content: result.content, version: result.version });
+          }
+        } else if (response.status === 401) {
+          console.error('Authentication failed');
+        } else {
+          console.error('Auto save failed:', response.statusText);
+        }
       } catch (error) {
         console.error('Auto save failed:', error);
       }
@@ -213,23 +250,28 @@ function AutoSavePlugin({
         clearTimeout(saveTimer.current);
       }
     };
-  }, [content, onSave, isEnabled, saveDelay]);
+  }, [content, documentId, isEnabled, saveDelay, setDocumentState, documentState]);
 
   return null;
 }
 
-// 智能版本管理插件
+// 智能版本管理插件 - 创建版本
 function SmartVersioningPlugin({
+  documentId,  // 添加 documentId 参数
   content,
+  documentState,  // 添加 documentState 参数
   onCreateVersion,
   versionDelay = 60000 // 1分钟
 }: {
+  documentId: number;  // 添加类型定义
   content: string;
+  documentState: DocumentState | null;  // 添加类型定义
   onCreateVersion: (content: string) => Promise<void>;
   versionDelay?: number;
 }) {
   const versionTimer = useRef<NodeJS.Timeout>();
   const lastVersionContent = useRef<string>('');
+  const lastUserInputTime = useRef<number>(Date.now());  // 记录用户最后输入时间
   const isUserEditing = useRef<boolean>(false);
 
   useEffect(() => {
@@ -238,6 +280,8 @@ function SmartVersioningPlugin({
       return;
     }
 
+    // 更新用户最后输入时间
+    lastUserInputTime.current = Date.now();
     isUserEditing.current = true;
 
     // 清除之前的定时器
@@ -247,13 +291,35 @@ function SmartVersioningPlugin({
 
     // 设置新的定时器，在用户停止编辑后创建版本
     versionTimer.current = setTimeout(async () => {
-      if (isUserEditing.current && content !== lastVersionContent.current) {
+      // 检查距离用户最后输入是否超过指定时间
+      const timeSinceLastInput = Date.now() - lastUserInputTime.current;
+      
+      if (timeSinceLastInput >= versionDelay && 
+          isUserEditing.current && 
+          content !== lastVersionContent.current) {
         try {
-          await onCreateVersion(content);
-          lastVersionContent.current = content;
-          isUserEditing.current = false;
+          // 调用同步接口，但设置 create_version: true
+          const response = await fetch('/v1/sharedb/documents/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            },
+            body: JSON.stringify({
+              doc_id: documentId.toString(),
+              version: documentState?.version || 0,
+              content: content,
+              create_version: true  // 智能版本创建
+            })
+          });
+          
+          if (response.ok) {
+            lastVersionContent.current = content;
+            isUserEditing.current = false;
+            console.log('Smart version created after user inactivity');
+          }
         } catch (error) {
-          console.error('Auto version creation failed:', error);
+          console.error('Smart version creation failed:', error);
         }
       }
     }, versionDelay);
@@ -263,7 +329,7 @@ function SmartVersioningPlugin({
         clearTimeout(versionTimer.current);
       }
     };
-  }, [content, onCreateVersion, versionDelay]);
+  }, [content, documentId, documentState, onCreateVersion, versionDelay]);
 
   return null;
 }
@@ -403,9 +469,15 @@ export function CollaborativeLexicalEditor({
         setContent(textContent);
         setHasUnsavedChanges(textContent !== (documentState?.content || initialContent));
         onContentChange?.(textContent);
+        
+        // 记录用户输入时间（用于智能版本控制）
+        if (smartVersioningEnabled) {
+          // 这里可以触发一个事件或更新状态，让 SmartVersioningPlugin 知道用户正在输入
+          console.log('User input detected at:', new Date().toISOString());
+        }
       }
     });
-  }, [content, documentState, initialContent, onContentChange]);
+  }, [content, documentState, initialContent, onContentChange, smartVersioningEnabled]);
 
   // 保存功能
   const handleSave = useCallback(async (contentToSave?: string) => {
@@ -779,16 +851,20 @@ export function CollaborativeLexicalEditor({
                 
                 {/* 自动保存插件 */}
                 <AutoSavePlugin
-                  onSave={handleSave}
+                  documentId={documentId}
                   content={content}
                   isEnabled={autoSaveEnabled}
                   saveDelay={1000}
+                  setDocumentState={setDocumentState}
+                  documentState={documentState}
                 />
                 
                 {/* 智能版本管理插件 */}
                 {smartVersioningEnabled && (
                   <SmartVersioningPlugin
+                    documentId={documentId}  // 传递 documentId
                     content={content}
+                    documentState={documentState}  // 传递 documentState
                     onCreateVersion={handleCreateVersion}
                     versionDelay={60000} // 1分钟
                   />

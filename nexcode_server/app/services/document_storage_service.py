@@ -4,13 +4,14 @@
 """
 
 import asyncio
+import hashlib
 from typing import Optional, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models.document_models import (
+from app.models.database import (
     Document, 
     DocumentVersion, 
     DocumentOperation, 
@@ -93,11 +94,13 @@ class DocumentStorageService:
                     return
                 
                 # 保存旧版本
+                content_hash = hashlib.md5(document.content.encode()).hexdigest()
                 old_version = DocumentVersion(
                     document_id=document_id,
                     version_number=document.version,
                     title=document.title,
                     content=document.content,
+                    content_hash=content_hash,  # 添加内容哈希
                     changed_by=document.last_editor_id or document.owner_id,
                     change_description=f"自动保存 - 版本 {document.version}"
                 )
@@ -183,11 +186,13 @@ class DocumentStorageService:
                 next_version = max_version + 1
                 
                 # 创建新版本
+                content_hash = hashlib.md5(document.content.encode()).hexdigest()
                 new_version = DocumentVersion(
                     document_id=document_id,
                     version_number=next_version,
                     title=document.title,
                     content=document.content,
+                    content_hash=content_hash,  # 添加内容哈希
                     changed_by=user_id,
                     change_description=description
                 )
@@ -222,11 +227,13 @@ class DocumentStorageService:
                 next_version = max_version + 1
                 
                 # 创建新版本
+                content_hash = hashlib.md5(content.encode()).hexdigest()
                 new_version = DocumentVersion(
                     document_id=document_id,
                     version_number=next_version,
                     title=document.title,
                     content=content,  # 使用提供的内容
+                    content_hash=content_hash,  # 添加内容哈希
                     changed_by=user_id,
                     change_description=description
                 )
@@ -302,11 +309,13 @@ class DocumentStorageService:
                     return None
                 
                 # 创建当前内容的备份版本
+                backup_content_hash = hashlib.md5(document.content.encode()).hexdigest()
                 backup_version = DocumentVersion(
                     document_id=document_id,
                     version_number=document.version,
                     title=document.title,
                     content=document.content,
+                    content_hash=backup_content_hash,  # 添加内容哈希
                     changed_by=document.last_editor_id or document.owner_id,
                     change_description=f"恢复前的备份 - 版本 {document.version}"
                 )
@@ -320,13 +329,15 @@ class DocumentStorageService:
                 document.updated_at = datetime.utcnow()
                 
                 # 创建恢复记录
+                restore_content_hash = hashlib.md5(document.content.encode()).hexdigest()
                 restore_version = DocumentVersion(
                     document_id=document_id,
                     version_number=document.version,
-                    title=target_version.title,
-                    content=target_version.content,
+                    title=document.title,
+                    content=document.content,
+                    content_hash=restore_content_hash,  # 添加内容哈希
                     changed_by=user_id,
-                    change_description=f"恢复到版本 {version_number}"
+                    change_description=f"恢复到版本 {target_version.version_number}"
                 )
                 db.add(restore_version)
                 

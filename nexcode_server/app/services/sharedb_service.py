@@ -1,11 +1,19 @@
 import json
 import asyncio
+import hashlib
+import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-import logging
+
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
+
+from app.core.database import Base
+from .document_service import DocumentService
+from app.models.database import Document, DocumentVersion
 
 logger = logging.getLogger(__name__)
 
@@ -185,112 +193,85 @@ class ShareDBService:
             logger.error(f"Failed to get operations for {doc_id}: {e}")
             raise HTTPException(status_code=500, detail="Failed to get operations")
     
-    async def sync_document(self, doc_id: str, client_version: int, client_content: str, user_id: int) -> Dict[str, Any]:
-        """同步文档状态"""
+    async def sync_document(self, doc_id: str, version: int, content: str, 
+                           user_id: int, create_version: bool = False, db_session: AsyncSession = None) -> dict:
+        """同步文档到ShareDB，可选创建PostgreSQL版本快照"""
         lock = self._get_doc_lock(doc_id)
+        if create_version:
+            version = version + 1
         async with lock:
             try:
-                # 获取当前文档状态
-                current_doc = self.documents.find_one({"doc_id": doc_id})
-                if not current_doc:
-                    # 创建新文档
-                    doc = {
-                        "doc_id": doc_id,
-                        "content": client_content,
-                        "version": 1,
-                        "created_at": datetime.utcnow(),
-                        "updated_at": datetime.utcnow()
-                    }
-                    self.documents.insert_one(doc)
-                    
-                    return {
-                        "success": True,
-                        "version": 1,
-                        "content": client_content,
-                        "operations": [],
-                        "error": None
-                    }
-                
-                current_version = current_doc["version"]
-                current_content = current_doc["content"]
-                
-                if client_version == current_version:
-                    if client_content != current_content:
-                        # 客户端有未同步的更改
-                        new_version = current_version + 1
-                        self.documents.update_one(
-                            {"doc_id": doc_id},
-                            {
-                                "$set": {
-                                    "content": client_content,
-                                    "version": new_version,
-                                    "updated_at": datetime.utcnow()
-                                }
-                            }
-                        )
-                        
-                        # 记录操作
-                        op_record = {
-                            "doc_id": doc_id,
-                            "version": new_version,
-                            "operation": {
-                                "type": "full_update",
-                                "content": client_content
-                            },
-                            "user_id": user_id,
-                            "timestamp": datetime.utcnow()
+                # 1. 更新 ShareDB (MongoDB) 中的文档内容
+                result = self.documents.update_one(
+                    {"doc_id": doc_id},
+                    {
+                        "$set": {
+                            "content": content,
+                            "version": version,
+                            "updated_at": datetime.utcnow(),
+                            "last_editor_id": user_id
                         }
-                        self.operations.insert_one(op_record)
-                        
-                        return {
-                            "success": True,
-                            "version": new_version,
-                            "content": client_content,
-                            "operations": [],
-                            "error": None
-                        }
-                    else:
-                        # 内容一致，无需更新
-                        return {
-                            "success": True,
-                            "version": current_version,
-                            "content": current_content,
-                            "operations": [],
-                            "error": None
-                        }
+                    },
+                    upsert=True
+                )
                 
-                elif client_version < current_version:
-                    # 获取客户端缺失的操作
-                    missing_operations = await self.get_operations_since(doc_id, client_version)
-                    
-                    return {
-                        "success": True,
-                        "version": current_version,
-                        "content": current_content,
-                        "operations": missing_operations,
-                        "error": None
-                    }
+                # 2. 记录操作历史
+                operation = {
+                    "doc_id": doc_id,
+                    "version": version,
+                    "content": content,
+                    "user_id": user_id,
+                    "timestamp": datetime.utcnow(),
+                    "operation_type": "sync"
+                }
+                self.operations.insert_one(operation)
                 
-                else:
-                    # 客户端版本超前，这不应该发生
-                    logger.warning(f"Client version {client_version} ahead of server version {current_version} for doc {doc_id}")
-                    return {
-                        "success": False,
-                        "error": "invalid_version",
-                        "version": current_version,
-                        "content": current_content,
-                        "operations": []
-                    }
-                    
-            except Exception as e:
-                logger.error(f"Failed to sync document {doc_id}: {e}")
+                # 3. 可选：在PostgreSQL中创建版本快照（用于长期存储和恢复）
+                if create_version and db_session:
+                    await self._create_version_snapshot(
+                        db_session, doc_id, content, user_id, version
+                    )
+                
                 return {
-                    "success": False,
-                    "error": f"同步失败: {str(e)}",
-                    "version": 0,
-                    "content": "",
+                    "success": True,
+                    "content": content,
+                    "version": version,
                     "operations": []
                 }
+            except Exception as e:
+                logger.error(f"Sync document failed: {e}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "content": content,
+                    "version": version,
+                    "operations": []
+                }
+    
+    async def _create_version_snapshot(self, db_session: AsyncSession, doc_id: str, 
+                                     content: str, user_id: int, version: int):
+        """在PostgreSQL中创建版本快照（仅用于长期存储）"""
+        try:
+            # 获取文档元数据
+            from sqlalchemy import select
+            stmt = select(Document).where(Document.id == int(doc_id))
+            result = await db_session.execute(stmt)
+            document = result.scalar_one_or_none()
+            
+            content_hash = hashlib.md5(content.encode()).hexdigest()
+            snapshot = DocumentVersion(
+                document_id=int(doc_id),
+                version_number=version,
+                title=document.title,
+                content=content,
+                content_hash=content_hash,
+                changed_by=user_id,
+                change_description=f"自动快照 - 版本 {version}",
+            )
+            db_session.add(snapshot)
+            await db_session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to create version snapshot: {e}")
     
     async def close(self):
         """关闭服务"""

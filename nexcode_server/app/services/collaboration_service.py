@@ -4,7 +4,7 @@ from typing import Dict, List, Optional
 from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.document_models import Document, DocumentVersion, DocumentOperation, OperationType
+from app.models.database import Document, DocumentVersion, DocumentOperation, OperationType
 from app.core.database import get_db
 from app.services.document_storage_service import document_storage_service
 

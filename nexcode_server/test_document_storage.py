@@ -11,8 +11,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from app.core.database import get_db
-from app.models.database import User
-from app.models.document_models import Document, DocumentVersion, DocumentOperation
+from app.models.database import User, Document, DocumentVersion, DocumentOperation
 from app.services.collaboration_service import collaboration_manager
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
