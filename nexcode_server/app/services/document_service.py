@@ -110,7 +110,7 @@ class DocumentService:
             "content": content,  # 来自 ShareDB
             "version": version,  # 来自 ShareDB
             "category": document.category,
-            "tags": document.tags.split(",") if document.tags else [],
+            "tags": document.tags,
             "owner": document.owner,
             "created_at": document.created_at,
             "updated_at": document.updated_at,

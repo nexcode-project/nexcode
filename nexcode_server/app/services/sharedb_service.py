@@ -53,9 +53,14 @@ class ShareDBService:
         return self.doc_locks[doc_id]
     
     async def get_document(self, doc_id: str) -> Dict[str, Any]:
-        """获取文档当前状态"""
+        """获取文档当前状态，确保返回最新版本"""
         try:
-            doc = self.documents.find_one({"doc_id": doc_id})
+            # 使用排序确保获取最新状态
+            doc = self.documents.find_one(
+                {"doc_id": doc_id},
+                sort=[("updated_at", -1)]  # 按更新时间降序排列
+            )
+            
             if not doc:
                 # 创建新文档
                 doc = {
@@ -63,16 +68,20 @@ class ShareDBService:
                     "content": "",
                     "version": 0,
                     "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.utcnow(),
+                    "last_editor_id": None
                 }
-                self.documents.insert_one(doc)
+                result = self.documents.insert_one(doc)
+                doc["_id"] = result.inserted_id
+                logger.info(f"Created new document {doc_id}")
             
             return {
                 "doc_id": doc["doc_id"],
                 "content": doc["content"],
                 "version": doc["version"],
                 "created_at": doc["created_at"].isoformat(),
-                "updated_at": doc["updated_at"].isoformat()
+                "updated_at": doc["updated_at"].isoformat(),
+                "last_editor_id": doc.get("last_editor_id")
             }
         except Exception as e:
             logger.error(f"Failed to get document {doc_id}: {e}")
