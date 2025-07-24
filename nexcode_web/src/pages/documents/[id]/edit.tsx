@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
-import { MarkdownEditor } from '@/components/MarkdownEditor';
+import { CollaborativeLexicalEditor } from '@/components/CollaborativeLexicalEditor';
 import { api } from '@/lib/api';
 import { toast } from 'react-hot-toast';
 
@@ -100,7 +100,7 @@ export default function DocumentEdit() {
         <meta name="description" content="协作式 Markdown 文档编辑器" />
       </Head>
       
-      <MarkdownEditor
+      <CollaborativeLexicalEditor
         documentId={document.id}
         initialContent={document.content}
         onContentChange={handleContentChange}

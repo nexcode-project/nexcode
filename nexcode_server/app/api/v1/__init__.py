@@ -8,6 +8,7 @@ from .push_strategy import router as push_strategy_router
 from .intelligent_qa import router as intelligent_qa_router
 from .repository_analysis import router as repository_analysis_router
 from .openai_compatible import router as openai_router
+from .sharedb import router as sharedb_router
 
 router = APIRouter()
 
@@ -20,6 +21,9 @@ router.include_router(code_quality_router, tags=["code_quality"])
 router.include_router(push_strategy_router, tags=["push_strategy"])
 router.include_router(intelligent_qa_router, tags=["intelligent_qa"])
 router.include_router(repository_analysis_router, tags=["repository_analysis"])
+
+# 注册ShareDB协作API路由
+router.include_router(sharedb_router, prefix="/sharedb", tags=["sharedb"])
 
 # 注册OpenAI兼容API路由
 router.include_router(openai_router, tags=["openai_compatible"]) 
