@@ -4,13 +4,14 @@
 """
 
 import asyncio
+import hashlib
 from typing import Optional, Dict, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, desc
 from datetime import datetime
 
 from app.core.database import get_db
-from app.models.document_models import (
+from app.models.database import (
     Document, 
     DocumentVersion, 
     DocumentOperation, 
@@ -93,11 +94,13 @@ class DocumentStorageService:
                     return
                 
                 # 保存旧版本
+                content_hash = hashlib.md5(document.content.encode()).hexdigest()
                 old_version = DocumentVersion(
                     document_id=document_id,
                     version_number=document.version,
                     title=document.title,
                     content=document.content,
+                    content_hash=content_hash,  # 添加内容哈希
                     changed_by=document.last_editor_id or document.owner_id,
                     change_description=f"自动保存 - 版本 {document.version}"
                 )
@@ -144,7 +147,7 @@ class DocumentStorageService:
             print(f"❌ 保存操作记录失败: {e}")
             import traceback
             traceback.print_exc()
-    
+
     async def get_document_versions(self, document_id: int, limit: int = 10) -> List[DocumentVersion]:
         """获取文档版本历史"""
         try:
@@ -152,33 +155,16 @@ class DocumentStorageService:
                 stmt = (
                     select(DocumentVersion)
                     .where(DocumentVersion.document_id == document_id)
-                    .order_by(DocumentVersion.version_number.desc())
+                    .order_by(desc(DocumentVersion.version_number))
                     .limit(limit)
                 )
                 result = await db.execute(stmt)
                 versions = result.scalars().all()
                 return list(versions)
         except Exception as e:
-            print(f"❌ 获取文档版本失败: {e}")
+            print(f"❌ 获取版本历史失败: {e}")
             return []
-    
-    async def get_document_operations(self, document_id: int, limit: int = 50) -> List[DocumentOperation]:
-        """获取文档操作历史"""
-        try:
-            async for db in get_db():
-                stmt = (
-                    select(DocumentOperation)
-                    .where(DocumentOperation.document_id == document_id)
-                    .order_by(DocumentOperation.created_at.desc())
-                    .limit(limit)
-                )
-                result = await db.execute(stmt)
-                operations = result.scalars().all()
-                return list(operations)
-        except Exception as e:
-            print(f"❌ 获取文档操作失败: {e}")
-            return []
-    
+
     async def create_version_snapshot(self, document_id: int, user_id: int, description: str):
         """创建版本快照"""
         try:
@@ -189,34 +175,191 @@ class DocumentStorageService:
                 document = result.scalar_one_or_none()
                 
                 if not document:
-                    print(f"❌ 文档 {document_id} 不存在")
-                    return
+                    return False
                 
-                # 创建版本快照（使用当前版本号）
-                version = DocumentVersion(
+                # 获取下一个版本号
+                max_version_stmt = select(func.max(DocumentVersion.version_number)).where(
+                    DocumentVersion.document_id == document_id
+                )
+                max_version_result = await db.execute(max_version_stmt)
+                max_version = max_version_result.scalar() or 0
+                next_version = max_version + 1
+                
+                # 创建新版本
+                content_hash = hashlib.md5(document.content.encode()).hexdigest()
+                new_version = DocumentVersion(
                     document_id=document_id,
-                    version_number=document.version,
+                    version_number=next_version,
                     title=document.title,
                     content=document.content,
+                    content_hash=content_hash,  # 添加内容哈希
                     changed_by=user_id,
                     change_description=description
                 )
                 
-                db.add(version)
+                db.add(new_version)
                 await db.commit()
-                print(f"✅ 版本快照已创建: document_id={document_id}, version={document.version}, description={description}")
-                break
+                print(f"✅ 版本快照已创建: document_id={document_id}, version={next_version}")
+                return True
                 
         except Exception as e:
             print(f"❌ 创建版本快照失败: {e}")
-            import traceback
-            traceback.print_exc()
-    
-    async def restore_version(self, document_id: int, version_number: int, user_id: int):
+            return False
+
+    async def create_version_snapshot_with_content(self, document_id: int, user_id: int, description: str, content: str):
+        """使用指定内容创建版本快照"""
+        try:
+            async for db in get_db():
+                # 获取当前文档
+                stmt = select(Document).where(Document.id == document_id)
+                result = await db.execute(stmt)
+                document = result.scalar_one_or_none()
+                
+                if not document:
+                    return False
+                
+                # 获取下一个版本号
+                max_version_stmt = select(func.max(DocumentVersion.version_number)).where(
+                    DocumentVersion.document_id == document_id
+                )
+                max_version_result = await db.execute(max_version_stmt)
+                max_version = max_version_result.scalar() or 0
+                next_version = max_version + 1
+                
+                # 创建新版本
+                content_hash = hashlib.md5(content.encode()).hexdigest()
+                new_version = DocumentVersion(
+                    document_id=document_id,
+                    version_number=next_version,
+                    title=document.title,
+                    content=content,  # 使用提供的内容
+                    content_hash=content_hash,  # 添加内容哈希
+                    changed_by=user_id,
+                    change_description=description
+                )
+                
+                db.add(new_version)
+                await db.commit()
+                print(f"✅ 版本快照已创建（指定内容）: document_id={document_id}, version={next_version}")
+                return True
+                
+        except Exception as e:
+            print(f"❌ 创建版本快照失败: {e}")
+            return False
+
+    async def restore_version(self, document_id: int, version_number: int, user_id: int) -> bool:
         """恢复到指定版本"""
         try:
             async for db in get_db():
                 # 获取指定版本
+                version_stmt = select(DocumentVersion).where(
+                    DocumentVersion.document_id == document_id,
+                    DocumentVersion.version_number == version_number
+                )
+                version_result = await db.execute(version_stmt)
+                target_version = version_result.scalar_one_or_none()
+                
+                if not target_version:
+                    return False
+                
+                # 获取当前文档
+                doc_stmt = select(Document).where(Document.id == document_id)
+                doc_result = await db.execute(doc_stmt)
+                document = doc_result.scalar_one_or_none()
+                
+                if not document:
+                    return False
+                
+                # 恢复文档内容
+                document.content = target_version.content
+                document.title = target_version.title
+                document.version += 1
+                document.last_editor_id = user_id
+                document.updated_at = datetime.utcnow()
+                
+                await db.commit()
+                print(f"✅ 版本已恢复: document_id={document_id}, 恢复到版本={version_number}, 新版本={document.version}")
+                return True
+                
+        except Exception as e:
+            print(f"❌ 恢复版本失败: {e}")
+            return False
+
+    async def restore_version_with_content(self, document_id: int, version_number: int, user_id: int) -> Optional[Dict]:
+        """恢复到指定版本并返回内容"""
+        try:
+            async for db in get_db():
+                # 获取指定版本
+                version_stmt = select(DocumentVersion).where(
+                    DocumentVersion.document_id == document_id,
+                    DocumentVersion.version_number == version_number
+                )
+                version_result = await db.execute(version_stmt)
+                target_version = version_result.scalar_one_or_none()
+                
+                if not target_version:
+                    return None
+                
+                # 获取当前文档
+                doc_stmt = select(Document).where(Document.id == document_id)
+                doc_result = await db.execute(doc_stmt)
+                document = doc_result.scalar_one_or_none()
+                
+                if not document:
+                    return None
+                
+                # 创建当前内容的备份版本
+                backup_content_hash = hashlib.md5(document.content.encode()).hexdigest()
+                backup_version = DocumentVersion(
+                    document_id=document_id,
+                    version_number=document.version,
+                    title=document.title,
+                    content=document.content,
+                    content_hash=backup_content_hash,  # 添加内容哈希
+                    changed_by=document.last_editor_id or document.owner_id,
+                    change_description=f"恢复前的备份 - 版本 {document.version}"
+                )
+                db.add(backup_version)
+                
+                # 恢复文档内容
+                document.content = target_version.content
+                document.title = target_version.title
+                document.version += 1
+                document.last_editor_id = user_id
+                document.updated_at = datetime.utcnow()
+                
+                # 创建恢复记录
+                restore_content_hash = hashlib.md5(document.content.encode()).hexdigest()
+                restore_version = DocumentVersion(
+                    document_id=document_id,
+                    version_number=document.version,
+                    title=document.title,
+                    content=document.content,
+                    content_hash=restore_content_hash,  # 添加内容哈希
+                    changed_by=user_id,
+                    change_description=f"恢复到版本 {target_version.version_number}"
+                )
+                db.add(restore_version)
+                
+                await db.commit()
+                await db.refresh(document)
+                
+                print(f"✅ 版本已恢复（带内容）: document_id={document_id}, 恢复到版本={version_number}, 新版本={document.version}")
+                
+                return {
+                    "success": True,
+                    "content": document.content,
+                    "new_version": document.version
+                }
+                
+        except Exception as e:
+            print(f"❌ 恢复版本失败: {e}")
+            return None
+
+    async def get_version_content(self, document_id: int, version_number: int) -> Optional[str]:
+        """获取指定版本的内容"""
+        try:
+            async for db in get_db():
                 stmt = select(DocumentVersion).where(
                     DocumentVersion.document_id == document_id,
                     DocumentVersion.version_number == version_number
@@ -224,122 +367,95 @@ class DocumentStorageService:
                 result = await db.execute(stmt)
                 version = result.scalar_one_or_none()
                 
-                if not version:
-                    print(f"❌ 版本 {version_number} 不存在")
-                    return False
-                
-                # 获取当前文档
-                stmt = select(Document).where(Document.id == document_id)
-                result = await db.execute(stmt)
-                document = result.scalar_one_or_none()
-                
-                if not document:
-                    print(f"❌ 文档 {document_id} 不存在")
-                    return False
-                
-                # 保存当前版本
-                current_version = DocumentVersion(
-                    document_id=document_id,
-                    version_number=document.version,
-                    title=document.title,
-                    content=document.content,
-                    changed_by=document.last_editor_id or document.owner_id,
-                    change_description=f"恢复前版本 - 版本 {document.version}"
-                )
-                db.add(current_version)
-                
-                # 恢复内容
-                document.content = version.content
-                document.version += 1
-                document.last_editor_id = user_id
-                document.updated_at = datetime.utcnow()
-                
-                await db.commit()
-                print(f"✅ 版本恢复成功: document_id={document_id}, 恢复到版本 {version_number}")
-                return True
+                if version:
+                    return version.content
+                return None
                 
         except Exception as e:
-            print(f"❌ 版本恢复失败: {e}")
-            import traceback
-            traceback.print_exc()
-            return False
-    
+            print(f"❌ 获取版本内容失败: {e}")
+            return None
+
     async def get_document_statistics(self, document_id: int) -> Dict:
         """获取文档统计信息"""
         try:
             async for db in get_db():
-                # 获取文档信息
-                stmt = select(Document).where(Document.id == document_id)
-                result = await db.execute(stmt)
-                document = result.scalar_one_or_none()
-                
-                if not document:
-                    return {}
-                
                 # 获取版本数量
-                stmt = select(func.count(DocumentVersion.id)).where(DocumentVersion.document_id == document_id)
-                result = await db.execute(stmt)
-                version_count = result.scalar() or 0
+                version_count_stmt = select(func.count()).select_from(DocumentVersion).where(
+                    DocumentVersion.document_id == document_id
+                )
+                version_count_result = await db.execute(version_count_stmt)
+                version_count = version_count_result.scalar() or 0
                 
                 # 获取操作数量
-                stmt = select(func.count(DocumentOperation.id)).where(DocumentOperation.document_id == document_id)
-                result = await db.execute(stmt)
-                operation_count = result.scalar() or 0
+                operation_count_stmt = select(func.count()).select_from(DocumentOperation).where(
+                    DocumentOperation.document_id == document_id
+                )
+                operation_count_result = await db.execute(operation_count_stmt)
+                operation_count = operation_count_result.scalar() or 0
+                
+                # 获取最新版本
+                latest_version_stmt = select(func.max(DocumentVersion.version_number)).where(
+                    DocumentVersion.document_id == document_id
+                )
+                latest_version_result = await db.execute(latest_version_stmt)
+                latest_version = latest_version_result.scalar() or 0
                 
                 return {
                     "document_id": document_id,
-                    "title": document.title,
-                    "current_version": document.version,
-                    "content_length": len(document.content) if document.content else 0,
                     "version_count": version_count,
                     "operation_count": operation_count,
-                    "created_at": document.created_at,
-                    "updated_at": document.updated_at,
-                    "last_editor_id": document.last_editor_id
+                    "latest_version": latest_version,
+                    "generated_at": datetime.utcnow().isoformat()
                 }
                 
         except Exception as e:
-            print(f"❌ 获取文档统计信息失败: {e}")
-            return {}
-    
+            print(f"❌ 获取文档统计失败: {e}")
+            return {
+                "document_id": document_id,
+                "version_count": 0,
+                "operation_count": 0,
+                "latest_version": 0,
+                "generated_at": datetime.utcnow().isoformat(),
+                "error": str(e)
+            }
+
     async def cleanup_old_operations(self, document_id: int, keep_count: int = 100):
         """清理旧的操作记录"""
         try:
             async for db in get_db():
-                # 获取需要删除的操作ID
-                stmt = (
+                # 获取需要保留的操作ID
+                keep_operations_stmt = (
                     select(DocumentOperation.id)
                     .where(DocumentOperation.document_id == document_id)
-                    .order_by(DocumentOperation.created_at.desc())
-                    .offset(keep_count)
+                    .order_by(desc(DocumentOperation.created_at))
+                    .limit(keep_count)
                 )
-                result = await db.execute(stmt)
-                old_operation_ids = result.scalars().all()
+                keep_operations_result = await db.execute(keep_operations_stmt)
+                keep_ids = [row[0] for row in keep_operations_result.fetchall()]
                 
-                if old_operation_ids:
-                    # 删除旧操作
-                    stmt = select(DocumentOperation).where(DocumentOperation.id.in_(old_operation_ids))
-                    result = await db.execute(stmt)
-                    old_operations = result.scalars().all()
-                    
-                    for operation in old_operations:
-                        await db.delete(operation)
-                    
-                    await db.commit()
-                    print(f"✅ 清理了 {len(old_operations)} 条旧操作记录")
-                else:
-                    print(f"📝 无需清理操作记录")
-                    
+                if not keep_ids:
+                    return 0
+                
+                # 删除不在保留列表中的操作
+                delete_stmt = select(DocumentOperation).where(
+                    DocumentOperation.document_id == document_id,
+                    ~DocumentOperation.id.in_(keep_ids)
+                )
+                delete_result = await db.execute(delete_stmt)
+                operations_to_delete = delete_result.scalars().all()
+                
+                for operation in operations_to_delete:
+                    await db.delete(operation)
+                
+                await db.commit()
+                deleted_count = len(operations_to_delete)
+                print(f"✅ 已清理 {deleted_count} 条旧操作记录")
+                return deleted_count
+                
         except Exception as e:
-            print(f"❌ 清理旧操作记录失败: {e}")
-    
-    async def shutdown(self):
-        """关闭服务"""
-        if self.save_task and not self.save_task.done():
-            await self.save_queue.put(None)  # 发送停止信号
-            await self.save_task
-            print("✅ 文档存储服务已关闭")
+            print(f"❌ 清理操作记录失败: {e}")
+            return 0
 
 
-# 全局文档存储服务实例
+# 全局实例
 document_storage_service = DocumentStorageService() 

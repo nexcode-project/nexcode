@@ -282,23 +282,32 @@ class AuthService:
         return user
     
     async def verify_session_token(self, db: AsyncSession, session_token: str) -> Optional[User]:
-        """验证会话token"""
-        stmt = select(UserSession).where(
-            UserSession.session_token == session_token,
-            UserSession.is_active == True,
-            UserSession.expires_at > datetime.utcnow()
-        )
-        result = await db.execute(stmt)
-        session = result.scalar_one_or_none()
-        
-        if session:
-            # 更新最后活动时间
-            session.last_activity = datetime.utcnow()
-            await db.commit()
+        """验证会话令牌"""
+        try:
+            # 查询用户和会话
+            stmt = select(User).join(UserSession).where(
+                UserSession.session_token == session_token,
+                UserSession.expires_at > datetime.utcnow(),
+                User.is_active == True
+            )
             
-            # 获取用户
-            return await self.get_user_by_id(db, session.user_id)
-        return None
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+            
+            if user:
+                # 更新最后访问时间 - 修复 SQLAlchemy 语法
+                from sqlalchemy import update
+                await db.execute(
+                    update(UserSession)
+                    .where(UserSession.session_token == session_token)
+                    .values(expires_at=datetime.utcnow() + timedelta(hours=24))
+                )
+                await db.commit()
+            
+            return user
+        except Exception as e:
+            print(f"Error verifying session token: {e}")
+            return None
     
     def generate_api_key(self) -> tuple[str, str, str]:
         """生成API密钥

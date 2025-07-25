@@ -1,21 +1,14 @@
-from .database import User, CommitInfo, UserSession, APIKey, SystemSettings
-from .document_models import (
-    Document,
-    DocumentCollaborator,
-    DocumentVersion,
-    PermissionLevel,
-    DocumentStatus,
+from .database import (
+    Base, User, Document, DocumentVersion, UserSession, 
+    APIKey, CommitInfo, SystemSettings
 )
+from .schemas import *
+from .user_schemas import *
+from .document_schemas import *
+from .openai_schemas import *
 
 __all__ = [
-    "User",
-    "CommitInfo",
-    "UserSession",
-    "APIKey",
-    "SystemSettings",
-    "Document",
-    "DocumentCollaborator",
-    "DocumentVersion",
-    "PermissionLevel",
-    "DocumentStatus",
+    "Base", "User", "Document", "DocumentVersion", "UserSession",
+    "APIKey", "CommitInfo", "SystemSettings",
+    # ... 其他导出
 ]

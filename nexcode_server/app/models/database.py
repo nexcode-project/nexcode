@@ -7,11 +7,13 @@ from sqlalchemy import (
     Boolean,
     ForeignKey,
     JSON,
+    Enum,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
+import enum
 from app.core.database import Base
+from datetime import datetime
 
 
 class User(Base):
@@ -22,46 +24,23 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(100), unique=True, index=True, nullable=False)
-    full_name = Column(String(100), nullable=True)
-
-    # 密码认证字段
-    password_hash = Column(String(255), nullable=True)  # 密码哈希
-
-    # CAS相关字段
-    cas_user_id = Column(String(100), unique=True, index=True, nullable=True)
-    cas_attributes = Column(JSON, nullable=True)  # 存储CAS返回的用户属性
-
-    # 用户状态
+    full_name = Column(String(100))  # 匹配数据库字段
+    password_hash = Column(String(255))  # 匹配数据库字段名
+    cas_user_id = Column(String(100), unique=True, index=True)  # 匹配数据库字段
+    cas_attributes = Column(Text)  # JSON字段，匹配数据库
     is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)
-
-    # 时间戳
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-    last_login = Column(DateTime(timezone=True), nullable=True)
-
-    # 关系 - 明确指定外键
-    commit_infos = relationship(
-        "CommitInfo", back_populates="user", cascade="all, delete-orphan"
-    )
-    sessions = relationship(
-        "UserSession", back_populates="user", cascade="all, delete-orphan"
-    )
-    api_keys = relationship(
-        "APIKey", back_populates="user", cascade="all, delete-orphan"
-    )
-
-    # 文档相关关系 - 明确指定外键避免歧义
-    owned_documents = relationship(
-        "Document", foreign_keys="Document.owner_id", back_populates="owner"
-    )
-    collaborated_documents = relationship(
-        "DocumentCollaborator",
-        foreign_keys="DocumentCollaborator.user_id",
-        back_populates="user",
-    )
+    is_superuser = Column(Boolean, default=False)  # 匹配数据库字段
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # 匹配数据库字段
+    last_login = Column(DateTime)  # 匹配数据库字段
+    
+    # 关系 - 修复关系名称以匹配其他模型
+    owned_documents = relationship("Document", foreign_keys="Document.owner_id", back_populates="owner")
+    sessions = relationship("UserSession", back_populates="user")
+    api_keys = relationship("APIKey", back_populates="user")
+    document_versions = relationship("DocumentVersion", back_populates="user")
+    commit_infos = relationship("CommitInfo", back_populates="user")
+    collaborations = relationship("DocumentCollaborator", foreign_keys="DocumentCollaborator.user_id", back_populates="user")
 
 
 class CommitInfo(Base):
@@ -204,3 +183,119 @@ class SystemSettings(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+class PermissionLevel(str, enum.Enum):
+    """权限级别枚举"""
+
+    OWNER = "owner"  # 所有者
+    EDITOR = "editor"  # 编辑者
+    READER = "reader"  # 查看者
+
+
+class DocumentStatus(str, enum.Enum):
+    """文档状态枚举"""
+
+    ACTIVE = "active"
+    DELETED = "deleted"
+    ARCHIVED = "archived"
+
+
+class OperationType(str, enum.Enum):
+    """操作类型枚举"""
+
+    INSERT = "insert"
+    DELETE = "delete"
+    RETAIN = "retain"
+
+
+class Document(Base):
+    """文档表"""
+
+    __tablename__ = "documents"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    last_editor_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 最后编辑者
+
+    # 文档属性
+    category = Column(String(100), nullable=True)
+    tags = Column(JSON, nullable=True)  # 存储标签数组
+
+    # 状态和时间
+    status = Column(Enum(DocumentStatus), default=DocumentStatus.ACTIVE)
+    version = Column(Integer, nullable=False)  # 版本号
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # 关系
+    owner = relationship("User", foreign_keys=[owner_id], back_populates="owned_documents")
+    last_editor = relationship("User", foreign_keys=[last_editor_id])
+    collaborators = relationship("DocumentCollaborator", back_populates="document")
+    operations = relationship("DocumentOperation", back_populates="document")
+    versions = relationship("DocumentVersion", back_populates="document")
+
+
+class DocumentCollaborator(Base):
+    """文档协作者表"""
+
+    __tablename__ = "document_collaborators"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    permission = Column(Enum(PermissionLevel), nullable=False)
+    added_at = Column(DateTime(timezone=True), server_default=func.now())
+    added_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # 关系
+    document = relationship("Document", back_populates="collaborators")
+    user = relationship("User", foreign_keys=[user_id], back_populates="collaborations")
+    added_by_user = relationship("User", foreign_keys=[added_by])
+
+
+class DocumentOperation(Base):
+    """文档操作记录表 - 用于OT算法"""
+
+    __tablename__ = "document_operations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    operation_id = Column(String(50), nullable=False)  # 客户端生成的操作ID
+    sequence_number = Column(Integer, nullable=False)  # 操作序号
+
+    # 操作类型和内容
+    operation_type = Column(Enum(OperationType), nullable=False)
+    start_position = Column(Integer, nullable=False)
+    end_position = Column(Integer, nullable=False)
+    content = Column(Text, nullable=True)
+
+    # 时间戳
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # 关系
+    document = relationship("Document", back_populates="operations")
+    user = relationship("User")
+
+
+class DocumentVersion(Base):
+    """文档版本表"""
+
+    __tablename__ = "document_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
+    version_number = Column(Integer, nullable=False)
+    title = Column(String(200), nullable=False)
+    content = Column(Text, nullable=True)
+    content_hash = Column(String(32), nullable=False)  # 新增：内容哈希值
+    change_description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    changed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # 关系
+    document = relationship("Document", back_populates="versions")
+    user = relationship("User", back_populates="document_versions")

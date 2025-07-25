@@ -71,5 +71,5 @@ services:
       - mongo
 
 volumes:
-  db_data:
+  db_data: 
   mongo_data: 

@@ -2,12 +2,14 @@ from fastapi import APIRouter, HTTPException, status, Depends, Query
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+import difflib
 
 from app.core.dependencies import CurrentUser, DatabaseSession
 from app.services.document_service import document_service
 from app.services.permission_service import permission_service
 from app.services.auth_service import auth_service
 from app.services.document_storage_service import document_storage_service
+from app.services.sharedb_service import get_sharedb_service
 from app.models.document_schemas import (
     DocumentCreate,
     DocumentListItem,
@@ -27,6 +29,21 @@ from app.models.document_schemas import (
 
 class VersionSnapshotRequest(BaseModel):
     description: str
+    content: Optional[str] = None  # 添加content字段
+
+
+class VersionDiffResponse(BaseModel):
+    from_version: int
+    to_version: int
+    diff_html: str
+    diff_text: str
+
+
+class VersionRestoreResponse(BaseModel):
+    success: bool
+    content: str
+    version_number: int
+    message: str
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -119,36 +136,27 @@ async def get_document(
     document_id: int, current_user: CurrentUser, db: DatabaseSession
 ):
     """获取文档详情"""
-    document = await document_service.get_document(db, document_id, current_user.id)
+    # 获取 ShareDB 服务
+    sharedb_service = get_sharedb_service()
     
-    # 转换为响应格式
-    user_info = user_to_dict(document.owner) if document.owner else None
-    collaborators = []
-    
-    for collab in document.collaborators:
-        collaborator_response = CollaboratorResponse(
-            user=UserInfo.model_validate(user_to_dict(collab.user)),
-            permission=collab.permission,
-            added_at=collab.added_at,
-        )
-        collaborators.append(collaborator_response)
-    
-    response_data = DocumentResponse(
-        id=document.id,
-        title=document.title,
-        content=document.content,
-        category=document.category,
-        tags=document.tags,
-        status=document.status,
-        version=document.version,
-        created_at=document.created_at,
-        updated_at=document.updated_at,
-        owner=UserInfo.model_validate(user_info) if user_info else None,
-        collaborators=collaborators,
-        user_permission=PermissionLevel.READER,  # 根据实际权限设置
+    document_data = await document_service.get_document(
+        db, document_id, current_user.id, sharedb_service
     )
     
-    return response_data
+    # document_data 现在是字典格式，包含来自 ShareDB 的内容
+    return DocumentResponse(
+        id=document_data["id"],
+        title=document_data["title"],
+        content=document_data["content"],  # 来自 ShareDB
+        category=document_data["category"],
+        tags=document_data["tags"],
+        version=document_data["version"],  # 来自 ShareDB
+        owner=user_to_dict(document_data["owner"]) if document_data["owner"] else None,
+        collaborators=[],
+        created_at=document_data["created_at"],
+        updated_at=document_data["updated_at"],
+        status=document_data["status"]
+    )
 
 
 @router.put("/{document_id}", response_model=DocumentResponse)
@@ -160,7 +168,7 @@ async def update_document(
 ):
     """更新文档"""
     document = await document_service.update_document(
-        db=db,
+        db=db,  # 全部使用关键字参数
         document_id=document_id,
         user_id=current_user.id,
         title=document_data.title,
@@ -168,19 +176,21 @@ async def update_document(
         category=document_data.category,
         tags=document_data.tags,
         change_description=document_data.change_description,
+        create_version=True,  # 常规文档更新创建版本
     )
     
-    # 转换为响应格式
+    # 转换为响应格式 - 简化处理，避免异步关系访问
     user_info = user_to_dict(document.owner) if document.owner else None
     collaborators = []
     
-    for collab in document.collaborators:
-        collaborator_response = CollaboratorResponse(
-            user=UserInfo.model_validate(user_to_dict(collab.user)),
-            permission=collab.permission,
-            added_at=collab.added_at,
-        )
-        collaborators.append(collaborator_response)
+    # 暂时跳过协作者信息的加载，避免异步问题
+    # for collab in document.collaborators:
+    #     collaborator_response = CollaboratorResponse(
+    #         user=UserInfo.model_validate(user_to_dict(collab.user)),
+    #         permission=collab.permission,
+    #         added_at=collab.added_at,
+    #     )
+    #     collaborators.append(collaborator_response)
     
     response_data = DocumentResponse(
         id=document.id,
@@ -263,11 +273,20 @@ async def create_version_snapshot(
             status_code=status.HTTP_403_FORBIDDEN, detail="无权限编辑此文档"
         )
     
-    await document_storage_service.create_version_snapshot(document_id, current_user.id, request.description)
+    # 如果请求中包含内容，使用提供的内容创建版本
+    if request.content is not None:
+        await document_storage_service.create_version_snapshot_with_content(
+            document_id, current_user.id, request.description, request.content
+        )
+    else:
+        await document_storage_service.create_version_snapshot(
+            document_id, current_user.id, request.description
+        )
+    
     return {"message": "版本快照已创建"}
 
 
-@router.post("/{document_id}/versions/{version_number}/restore")
+@router.post("/{document_id}/versions/{version_number}/restore", response_model=VersionRestoreResponse)
 async def restore_version(
     document_id: int,
     version_number: int,
@@ -284,13 +303,77 @@ async def restore_version(
             status_code=status.HTTP_403_FORBIDDEN, detail="无权限编辑此文档"
         )
     
-    success = await document_storage_service.restore_version(document_id, version_number, current_user.id)
-    if success:
-        return {"message": f"已恢复到版本 {version_number}"}
+    result = await document_storage_service.restore_version_with_content(
+        document_id, version_number, current_user.id
+    )
+    
+    if result and result.get("success"):
+        return VersionRestoreResponse(
+            success=True,
+            content=result["content"],
+            version_number=result["new_version"],
+            message=f"已恢复到版本 {version_number}"
+        )
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在"
         )
+
+
+@router.get("/{document_id}/versions/{from_version}/diff/{to_version}", response_model=VersionDiffResponse)
+async def get_version_diff(
+    document_id: int,
+    from_version: int,
+    to_version: int,
+    current_user: CurrentUser,
+    db: DatabaseSession
+):
+    """获取两个版本之间的差异"""
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.READER
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限查看版本差异"
+        )
+    
+    # 获取两个版本的内容
+    from_content = await document_storage_service.get_version_content(document_id, from_version)
+    to_content = await document_storage_service.get_version_content(document_id, to_version)
+    
+    if from_content is None or to_content is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="指定版本不存在"
+        )
+    
+    # 生成文本差异
+    diff_lines = list(difflib.unified_diff(
+        from_content.splitlines(keepends=True),
+        to_content.splitlines(keepends=True),
+        fromfile=f"版本 {from_version}",
+        tofile=f"版本 {to_version}",
+        n=3
+    ))
+    diff_text = ''.join(diff_lines)
+    
+    # 生成HTML差异
+    html_diff = difflib.HtmlDiff()
+    diff_html = html_diff.make_file(
+        from_content.splitlines(),
+        to_content.splitlines(),
+        fromdesc=f"版本 {from_version}",
+        todesc=f"版本 {to_version}",
+        context=True,
+        numlines=2
+    )
+    
+    return VersionDiffResponse(
+        from_version=from_version,
+        to_version=to_version,
+        diff_html=diff_html,
+        diff_text=diff_text
+    )
 
 
 @router.get("/{document_id}/statistics")

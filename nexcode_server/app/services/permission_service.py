@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from fastapi import HTTPException, status
 
-from app.models.document_models import Document, DocumentCollaborator, PermissionLevel
+from app.models.database import Document, DocumentCollaborator, PermissionLevel
 from app.models.database import User
 
 class PermissionService:
