@@ -1,37 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { useAuthStore } from '@/store/authStore';
-import { MarkdownEditor } from '@/components/MarkdownEditor';
-import { api } from '@/lib/api';
-import { ArrowLeft, Save, Share2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { ArrowLeft, Share, Users, Save } from 'lucide-react';
+import { api } from '@/lib/api';
+import { useAuthStore } from '@/store/authStore';
+import Layout from '@/components/Layout';
+import { CollaborativeLexicalEditor } from '@/components/CollaborativeLexicalEditor';
 
-interface Document {
-  id: number;
-  title: string;
-  content: string;
-  created_by: number;
-  created_at: string;
-  updated_at: string;
-}
+// 导入类型
+import type { Document } from '@/types/api';
+import type { DocumentState } from '@/services/sharedb';
 
 export default function DocumentCollaborate() {
   const router = useRouter();
   const { id } = router.query;
   const { isAuthenticated, isLoading } = useAuthStore();
   const [document, setDocument] = useState<Document | null>(null);
+  const [documentState, setDocumentState] = useState<DocumentState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // 获取文档信息
+  // 获取文档信息 - 只获取一次，然后传递给编辑器
   useEffect(() => {
     if (!id || !isAuthenticated) return;
 
     const fetchDocument = async () => {
       try {
         const response = await api.get(`/v1/documents/${id}`);
-        setDocument(response.data);
+        const doc = response.data;
+        setDocument(doc);
+        
+        // 将文档信息转换为DocumentState格式
+        setDocumentState({
+          doc_id: doc.id.toString(),
+          content: doc.content || '',
+          version: 1, // 初始版本
+          created_at: doc.created_at,
+          updated_at: doc.updated_at
+        });
       } catch (error) {
         console.error('Failed to fetch document:', error);
         toast.error('获取文档失败');
@@ -137,7 +144,7 @@ export default function DocumentCollaborate() {
                   onClick={handleShare}
                   className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
                 >
-                  <Share2 className="h-4 w-4" />
+                  <Share className="h-4 w-4" />
                   <span>分享</span>
                 </button>
                 
@@ -155,13 +162,17 @@ export default function DocumentCollaborate() {
         </div>
 
         {/* 协作编辑器 */}
-        <MarkdownEditor
-          documentId={document.id}
-          initialContent={document.content}
-          onContentChange={(content: string) => {
-            setDocument(prev => prev ? { ...prev, content } : null);
-          }}
-        />
+        {documentState && (
+          <CollaborativeLexicalEditor
+            documentId={parseInt(id as string)}
+            initialContent={documentState.content}
+            initialDocumentState={documentState}
+            onContentChange={(content: string) => {
+              setDocument(prev => prev ? { ...prev, content } : null);
+            }}
+            onSave={handleSave}
+          />
+        )}
       </div>
     </>
   );

@@ -118,7 +118,9 @@ function IntelligentSyncPlugin({
   updateEditorContent,
   onContentChange,
   onCollaborativeUpdate,
-  sharedbClient
+  sharedbClient,
+  lastUserInputTimeRef,
+  setHasCollaborativeUpdates
 }: {
   documentId: number;
   content: string;
@@ -128,19 +130,16 @@ function IntelligentSyncPlugin({
   onContentChange?: (synced: boolean) => void;
   onCollaborativeUpdate?: (hasUpdates: boolean) => void;
   sharedbClient: ShareDBClient;
+  lastUserInputTimeRef: React.MutableRefObject<number>;
+  setHasCollaborativeUpdates: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
-  const [editor] = useLexicalComposerContext(); // 获取编辑器实例
+  const [editor] = useLexicalComposerContext();
   const syncTimer = useRef<NodeJS.Timeout>();
-  const versionTimer = useRef<NodeJS.Timeout>();
-  const pollTimer = useRef<NodeJS.Timeout>(); // 轮询其他用户更新
+  const pollTimer = useRef<NodeJS.Timeout>();
   const lastSyncedContent = useRef<string>('');
-  const lastUserInputTime = useRef<number>(Date.now());
-  const syncInterval = useRef<number>(2000); // 动态同步间隔，初始2秒
-  const pollInterval = useRef<number>(10000); // 轮询间隔，检查其他用户更新
-  const isUserEditing = useRef<boolean>(false);
   const syncInProgress = useRef<boolean>(false);
 
-  // 从编辑器获取当前内容
+  // 获取当前编辑器内容
   const getCurrentEditorContent = useCallback(() => {
     if (!editor) return content;
     
@@ -153,27 +152,20 @@ function IntelligentSyncPlugin({
     return editorContent || content;
   }, [editor, content]);
 
-  // 执行同步的核心函数
-  const performSync = useCallback(async (contentToSync?: string, createVersion: boolean = false) => {
-    if (syncInProgress.current) return false;
+  // 执行同步
+  const performSync = useCallback(async () => {
+    if (syncInProgress.current) return;
     
-    const actualContent = contentToSync || getCurrentEditorContent();
-    if (!actualContent) return false;
+    const currentContent = getCurrentEditorContent();
+    if (!currentContent || currentContent === lastSyncedContent.current) return;
     
     syncInProgress.current = true;
     
     try {
-      console.log('Syncing content:', {
-        length: actualContent.length,
-        version: documentState?.version || 0,
-        createVersion
-      });
-
-      // 使用 ShareDBClient 进行同步
-      const result = await sharedbClient.syncDocument(actualContent);
+      console.log('Syncing content:', { length: currentContent.length });
+      const result = await sharedbClient.syncDocument(currentContent);
 
       if (result.success) {
-        // 更新文档状态
         if (documentState) {
           setDocumentState({
             ...documentState,
@@ -184,99 +176,77 @@ function IntelligentSyncPlugin({
         
         lastSyncedContent.current = result.content;
         
-        // 如果服务器返回的内容与本地不同，说明有其他用户的更新
-        if (result.content !== actualContent) {
-          console.log('Server content differs, updating editor with collaborative changes');
+        // 如果服务器内容不同，说明有协作更新
+        if (result.content !== currentContent) {
+          console.log('Collaborative changes detected, updating editor');
           updateEditorContent(result.content);
-          onCollaborativeUpdate?.(true); // 通知有协作更新
-        }
-        
-        // 动态调整同步间隔
-        if (lastSyncedContent.current === actualContent) {
-          syncInterval.current = Math.min(syncInterval.current * 1.2, 30000);
-        } else {
-          syncInterval.current = 2000; // 重置为默认间隔
+          onCollaborativeUpdate?.(true);
         }
         
         onContentChange?.(true);
-        console.log(createVersion ? 'Version created' : 'Content synced', {
-          version: result.version,
-          interval: syncInterval.current,
-          hasCollaborativeChanges: result.content !== actualContent
-        });
-        
-        return true;
+        console.log('Content synced successfully');
       } else {
         console.error('Sync failed:', result.error);
-        return false;
+        onContentChange?.(false);
       }
     } catch (error) {
       console.error('Sync error:', error);
-      return false;
+      onContentChange?.(false);
     } finally {
       syncInProgress.current = false;
     }
   }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, onCollaborativeUpdate, getCurrentEditorContent, sharedbClient]);
 
-  // 轮询检查其他用户的更新
+  // 轮询检查更新 - 优化版本比较逻辑
   const pollForUpdates = useCallback(async () => {
     if (syncInProgress.current) return;
     
     try {
-      // 使用 ShareDBClient 获取最新文档状态
       const serverState = await sharedbClient.getDocument();
       
-      // 检查版本是否有更新
+      // 只有版本真正更新时才处理
       if (serverState.version > (documentState?.version || 0)) {
-        console.log('New version detected from other users:', serverState.version);
+        console.log('New version detected:', serverState.version);
         
-        // 如果用户当前没有在编辑，直接更新内容
-        if (!isUserEditing.current || Date.now() - lastUserInputTime.current > 5000) {
-          setDocumentState({
-            doc_id: serverState.doc_id,
-            content: serverState.content,
-            version: serverState.version,
-            created_at: serverState.created_at,
-            updated_at: serverState.updated_at
-          });
-          if (serverState.content !== lastSyncedContent.current) {
+        setDocumentState({
+          doc_id: serverState.doc_id,
+          content: serverState.content,
+          version: serverState.version,
+          created_at: serverState.created_at,
+          updated_at: serverState.updated_at
+        });
+        
+        // 检查用户是否正在编辑
+        const now = Date.now();
+        const timeSinceLastInput = now - lastUserInputTimeRef.current;
+        const userIsEditing = timeSinceLastInput < 5000;
+        
+        if (serverState.content !== lastSyncedContent.current) {
+          if (!userIsEditing) {
+            // 用户没有在编辑，直接更新
             updateEditorContent(serverState.content);
             lastSyncedContent.current = serverState.content;
-            onContentChange?.(true);
-          }          
-          console.log('Updated content from collaborative changes');
-        } else {
-          // 用户正在编辑，执行合并同步
-          console.log('User is editing, performing merge sync');
-          await performSync(undefined, false); // 使用当前编辑器内容
+            console.log('Applied collaborative changes');
+          } else {
+            // 用户正在编辑，标记有协作更新但不立即应用
+            console.log('Deferred collaborative update due to user editing');
+            setHasCollaborativeUpdates(true);
+          }
+          onCollaborativeUpdate?.(true);
         }
-      }
-      
-      // 动态调整轮询间隔并重启定时器
-      const newInterval = isUserEditing.current ? 6000 : Math.min(pollInterval.current * 1.1, 30000);
-      if (newInterval !== pollInterval.current) {
-        pollInterval.current = newInterval;
         
-        // 重启轮询定时器以使用新间隔
-        if (pollTimer.current) {
-          clearInterval(pollTimer.current);
-          console.log('Restarting polling with new interval:', pollInterval.current);
-          pollTimer.current = setInterval(pollForUpdates, pollInterval.current);
-        }
+        onContentChange?.(true);
       }
-      
-      onContentChange?.(true);
-      
     } catch (error) {
-      console.error('Failed to poll for updates:', error);
-      onContentChange?.(false); // 通知网络问题
+      console.error('Poll failed:', error);
+      onContentChange?.(false);
     }
-  }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, performSync, onCollaborativeUpdate, sharedbClient]);
+  }, [documentState, setDocumentState, updateEditorContent, onContentChange, onCollaborativeUpdate, sharedbClient, setHasCollaborativeUpdates]);
 
-  // 轮询其他用户更新 - 只在组件挂载时启动一次
+  // 启动轮询 - 每10秒一次
   useEffect(() => {
-    console.log('Starting initial collaborative polling');
-    pollTimer.current = setInterval(pollForUpdates, pollInterval.current);
+    console.log('Starting document polling every 10 seconds');
+    pollTimer.current = setInterval(pollForUpdates, 10000);
 
     return () => {
       if (pollTimer.current) {
@@ -285,75 +255,41 @@ function IntelligentSyncPlugin({
     };
   }, [pollForUpdates]);
 
-  // 组件初始化时执行一次同步
+  // 用户编辑检测 - 3秒后同步
   useEffect(() => {
-    const initSync = setTimeout(() => {
-      const initialContent = getCurrentEditorContent();
-      if (initialContent && initialContent !== lastSyncedContent.current) {
-        console.log('Initial sync on component mount');
-        performSync(undefined, false);
-      }
-    }, 1000); // 延迟1秒确保编辑器已初始化
-
-    return () => clearTimeout(initSync);
-  }, [getCurrentEditorContent, performSync]);
-
-  // 用户输入检测和同步调度
-  useEffect(() => {
-    const currentEditorContent = getCurrentEditorContent();
+    const currentContent = getCurrentEditorContent();
     
-    // 检测是否为用户主动编辑
-    if (currentEditorContent !== lastSyncedContent.current) {
-      lastUserInputTime.current = Date.now();
-      isUserEditing.current = true;
-      
-      // 重置同步间隔（用户活跃时更频繁同步）
-      syncInterval.current = Math.max(syncInterval.current * 0.8, 1000);
-      pollInterval.current = 3000; // 用户编辑时更频繁检查协作更新
-      
-      console.log('User input detected, scheduling sync');
-    } else {
-      // 用户停止编辑一段时间后，标记为非编辑状态
-      if (Date.now() - lastUserInputTime.current > 10000) { // 10秒无操作
-        isUserEditing.current = false;
-      }
-    }
-
-    // 清除之前的定时器
+    // 清除之前的同步定时器
     if (syncTimer.current) {
       clearTimeout(syncTimer.current);
     }
-    if (versionTimer.current) {
-      clearTimeout(versionTimer.current);
-    }
 
-    // 智能同步调度 - 确保真正执行同步
-    if (currentEditorContent !== lastSyncedContent.current) {
+    // 如果内容有变化，3秒后同步
+    if (currentContent !== lastSyncedContent.current) {
+      console.log('Content changed, scheduling sync in 3 seconds');
       syncTimer.current = setTimeout(() => {
-        console.log('Executing scheduled sync');
-        performSync(undefined, false); // 常规同步，不创建版本
-      }, syncInterval.current);
+        performSync();
+      }, 3000);
     }
-
-    // 版本创建调度（用户停止编辑1分钟后）
-    versionTimer.current = setTimeout(() => {
-      const timeSinceLastInput = Date.now() - lastUserInputTime.current;
-      const latestContent = getCurrentEditorContent();
-      
-      if (isUserEditing.current && 
-          timeSinceLastInput >= 60000 && // 1分钟无操作
-          latestContent !== lastSyncedContent.current) { // 内容有变化
-        
-        console.log('Creating version due to user inactivity');
-        performSync(undefined, true); // 创建版本
-        isUserEditing.current = false;
-      }
-    }, 60000);
 
     return () => {
-      if (syncTimer.current) clearTimeout(syncTimer.current);
-      if (versionTimer.current) clearTimeout(versionTimer.current);
+      if (syncTimer.current) {
+        clearTimeout(syncTimer.current);
+      }
     };
+  }, [getCurrentEditorContent, performSync]);
+
+  // 初始同步
+  useEffect(() => {
+    const initTimer = setTimeout(() => {
+      const initialContent = getCurrentEditorContent();
+      if (initialContent && initialContent !== lastSyncedContent.current) {
+        console.log('Initial sync');
+        performSync();
+      }
+    }, 1000);
+
+    return () => clearTimeout(initTimer);
   }, [getCurrentEditorContent, performSync]);
 
   return null;
@@ -365,6 +301,7 @@ import type { DocumentVersion } from '@/types/api';
 interface CollaborativeLexicalEditorProps {
   documentId: number;
   initialContent?: string;
+  initialDocumentState?: DocumentState; // 新增：传入初始文档状态
   onContentChange?: (content: string) => void;
   onSave?: (content: string) => Promise<void>;
 }
@@ -372,6 +309,7 @@ interface CollaborativeLexicalEditorProps {
 export function CollaborativeLexicalEditor({
   documentId,
   initialContent = '',
+  initialDocumentState, // 新增参数
   onContentChange,
   onSave
 }: CollaborativeLexicalEditorProps) {
@@ -404,27 +342,25 @@ export function CollaborativeLexicalEditor({
 
     const loadDocument = async () => {
       try {
-        // 從 ShareDB 獲取同步後的內容
-        console.log('Step 1: Getting synced content from ShareDB');
-        const docState = await client.getDocument();
-        console.log('ShareDB document state:', docState);
+        let finalContent = initialContent;
+        let docState = initialDocumentState;
+
+        // 如果没有传入初始状态，才从服务器获取
+        if (!docState) {
+          console.log('Getting document state from ShareDB');
+          docState = await client.getDocument();
+          finalContent = docState.content || initialContent;
+        } else {
+          console.log('Using provided initial document state');
+          finalContent = docState.content || initialContent;
+        }
         
-        let finalContent = docState.content;
-        
-        setDocumentState({
-          doc_id: documentId.toString(),
-          content: finalContent,
-          version: docState.version,
-          created_at: docState.created_at,
-          updated_at: docState.updated_at
-        });
-        setContent(finalContent || initialContent);
-        
+        setDocumentState(docState);
+        setContent(finalContent);
         setIsLoading(false);
         setLastSyncTime(new Date());
         setIsOnline(true);
         
-      
       } catch (error) {
         console.error('Failed to load document:', error);
         toast.error('加載文檔失敗，使用本地版本');
@@ -439,7 +375,7 @@ export function CollaborativeLexicalEditor({
     return () => {
       client.destroy();
     };
-  }, [documentId, initialContent]);
+  }, [documentId, initialContent, initialDocumentState]);
 
   // 编辑器初始配置
   const initialConfig = {
@@ -458,19 +394,18 @@ export function CollaborativeLexicalEditor({
     })() : undefined,
   };
 
-  // 更新编辑器内容（同步时使用）- 改进协作处理
+  // 更新编辑器内容（同步时使用）- 优化协作处理
   const updateEditorContent = useCallback((newContent: string) => {
     if (!editorRef.current) return;
     
-    // 检查用户是否正在活跃编辑
+    // 检查用户是否正在活跃编辑 - 简化逻辑
     const now = Date.now();
     const timeSinceLastInput = now - lastUserInputTimeRef.current;
-    const isActivelyEditing = timeSinceLastInput < 3000; // 3秒内有输入视为活跃编辑
+    const isActivelyEditing = timeSinceLastInput < 5000; // 5秒内有输入视为活跃编辑
     
     if (isActivelyEditing) {
-      console.log('User is actively editing, deferring content update');
-      // 如果用户正在活跃编辑，延迟更新
-      setTimeout(() => updateEditorContent(newContent), 2000);
+      console.log('User is actively editing, skipping collaborative update');
+      // 如果用户正在活跃编辑，跳过这次更新，不进行递归调用
       return;
     }
     
@@ -840,6 +775,8 @@ export function CollaborativeLexicalEditor({
                       }
                     }}
                     sharedbClient={sharedbClientRef.current}
+                    lastUserInputTimeRef={lastUserInputTimeRef}
+                    setHasCollaborativeUpdates={setHasCollaborativeUpdates}
                   />
                 )}
                 
