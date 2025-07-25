@@ -135,7 +135,6 @@ function IntelligentSyncPlugin({
   const pollTimer = useRef<NodeJS.Timeout>(); // 轮询其他用户更新
   const lastSyncedContent = useRef<string>('');
   const lastUserInputTime = useRef<number>(Date.now());
-  const lastSyncTime = useRef<number>(0); // 最後同步時間
   const syncInterval = useRef<number>(2000); // 动态同步间隔，初始2秒
   const pollInterval = useRef<number>(10000); // 轮询间隔，检查其他用户更新
   const isUserEditing = useRef<boolean>(false);
@@ -156,24 +155,10 @@ function IntelligentSyncPlugin({
 
   // 执行同步的核心函数
   const performSync = useCallback(async (contentToSync?: string, createVersion: boolean = false) => {
-    if (syncInProgress.current) {
-      console.log('Sync already in progress, skipping');
-      return false;
-    }
+    if (syncInProgress.current) return false;
     
     const actualContent = contentToSync || getCurrentEditorContent();
-    if (!actualContent) {
-      console.log('No content to sync');
-      return false;
-    }
-    
-    // 防抖：避免過於頻繁的同步
-    const now = Date.now();
-    if (now - lastSyncTime.current < 1000) {
-      console.log('Sync too frequent, skipping');
-      return false;
-    }
-    lastSyncTime.current = now;
+    if (!actualContent) return false;
     
     syncInProgress.current = true;
     
@@ -235,10 +220,7 @@ function IntelligentSyncPlugin({
 
   // 轮询检查其他用户的更新
   const pollForUpdates = useCallback(async () => {
-    if (syncInProgress.current) {
-      console.log('Sync in progress, skipping poll');
-      return;
-    }
+    if (syncInProgress.current) return;
     
     try {
       // 使用 ShareDBClient 获取最新文档状态
@@ -257,16 +239,29 @@ function IntelligentSyncPlugin({
             created_at: serverState.created_at,
             updated_at: serverState.updated_at
           });
-          
-          updateEditorContent(serverState.content);
-          lastSyncedContent.current = serverState.content;
-          onCollaborativeUpdate?.(true); // 通知有协作更新
-          
+          if (serverState.content !== lastSyncedContent.current) {
+            updateEditorContent(serverState.content);
+            lastSyncedContent.current = serverState.content;
+            onContentChange?.(true);
+          }          
           console.log('Updated content from collaborative changes');
         } else {
           // 用户正在编辑，执行合并同步
           console.log('User is editing, performing merge sync');
           await performSync(undefined, false); // 使用当前编辑器内容
+        }
+      }
+      
+      // 动态调整轮询间隔并重启定时器
+      const newInterval = isUserEditing.current ? 6000 : Math.min(pollInterval.current * 1.1, 30000);
+      if (newInterval !== pollInterval.current) {
+        pollInterval.current = newInterval;
+        
+        // 重启轮询定时器以使用新间隔
+        if (pollTimer.current) {
+          clearInterval(pollTimer.current);
+          console.log('Restarting polling with new interval:', pollInterval.current);
+          pollTimer.current = setInterval(pollForUpdates, pollInterval.current);
         }
       }
       
@@ -276,26 +271,19 @@ function IntelligentSyncPlugin({
       console.error('Failed to poll for updates:', error);
       onContentChange?.(false); // 通知网络问题
     }
-  }, [sharedbClient]); // 大幅減少依賴項，避免頻繁重建
+  }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, performSync, onCollaborativeUpdate, sharedbClient]);
 
-  // 轮询其他用户更新 - 使用固定間隔，避免頻繁重啟
+  // 轮询其他用户更新 - 只在组件挂载时启动一次
   useEffect(() => {
-    if (!sharedbClient) return;
-    
-    console.log('Starting collaborative polling with fixed interval');
-    const POLL_INTERVAL = 5000; // 固定 5 秒間隔
-    
-    pollTimer.current = setInterval(() => {
-      pollForUpdates();
-    }, POLL_INTERVAL);
+    console.log('Starting initial collaborative polling');
+    pollTimer.current = setInterval(pollForUpdates, pollInterval.current);
 
     return () => {
       if (pollTimer.current) {
         clearInterval(pollTimer.current);
-        console.log('Stopped collaborative polling');
       }
     };
-  }, []); // 空依賴數組，只在組件掛載時執行一次
+  }, [pollForUpdates]);
 
   // 组件初始化时执行一次同步
   useEffect(() => {
