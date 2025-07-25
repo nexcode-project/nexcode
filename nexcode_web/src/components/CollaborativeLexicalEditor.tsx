@@ -135,7 +135,7 @@ function IntelligentSyncPlugin({
   const lastSyncedContent = useRef<string>('');
   const lastUserInputTime = useRef<number>(Date.now());
   const syncInterval = useRef<number>(2000); // 动态同步间隔，初始2秒
-  const pollInterval = useRef<number>(5000); // 轮询间隔，检查其他用户更新
+  const pollInterval = useRef<number>(10000); // 轮询间隔，检查其他用户更新
   const isUserEditing = useRef<boolean>(false);
   const syncInProgress = useRef<boolean>(false);
 
@@ -411,37 +411,30 @@ export function CollaborativeLexicalEditor({
 
     const loadDocument = async () => {
       try {
-        // 使用 ShareDBClient 强制与服务器同步，获取最新版本
-        const syncResult = await client.forceSyncWithServer();
-        console.log('Force sync result:', syncResult);
+        // 從 ShareDB 獲取同步後的內容
+        console.log('Step 1: Getting synced content from ShareDB');
+        const docState = await client.getDocument();
+        console.log('ShareDB document state:', docState);
         
-        if (syncResult.success) {
-          setDocumentState({
-            doc_id: documentId.toString(),
-            content: syncResult.content,
-            version: syncResult.version,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-          setContent(syncResult.content || initialContent);
-          console.log('Using synced server content');
-        } else {
-          // 降级：尝试直接获取文档状态
-          const docState = await client.getDocument();
-          console.log('Fallback to document state:', docState);
-          
-          setDocumentState(docState);
-          setContent(docState.content || initialContent);
-          console.log('Using fallback ShareDB content');
-        }
+        let finalContent = docState.content;
+        
+        setDocumentState({
+          doc_id: documentId.toString(),
+          content: finalContent,
+          version: docState.version,
+          created_at: docState.created_at,
+          updated_at: docState.updated_at
+        });
+        setContent(finalContent || initialContent);
         
         setIsLoading(false);
         setLastSyncTime(new Date());
         setIsOnline(true);
         
+      
       } catch (error) {
         console.error('Failed to load document:', error);
-        toast.error('加载文档失败，使用本地版本');
+        toast.error('加載文檔失敗，使用本地版本');
         setContent(initialContent);
         setIsOnline(false);
         setIsLoading(false);
@@ -464,7 +457,12 @@ export function CollaborativeLexicalEditor({
       console.error('Lexical Error:', error);
       toast.error('编辑器错误');
     },
-    editorState: undefined,
+    editorState: content ? (() => {
+      // 如果有內容，創建包含該內容的初始狀態
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, 'text/html');
+      return undefined; // 暫時使用 undefined，稍後通過 updateEditorContent 設置
+    })() : undefined,
   };
 
   // 更新编辑器内容（同步时使用）- 改进协作处理
@@ -512,24 +510,54 @@ export function CollaborativeLexicalEditor({
     setContent(newContent);
   }, []);
 
-  // 跟踪用户输入时间（用于协作冲突检测）
+  // 當內容加載完成時，立即更新編輯器
+  useEffect(() => {
+    if (!isLoading && content && editorRef.current) {
+      console.log('Content loaded, updating editor with initial content:', content.length);
+      updateEditorContent(content);
+    }
+  }, [isLoading, content, updateEditorContent]);
+
+  // 跟踪用户输入时间（用于协作冲突检测）和快捷鍵
   useEffect(() => {
     const handleUserInput = () => {
       lastUserInputTimeRef.current = Date.now();
     };
     
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // 記錄用戶輸入時間
+      handleUserInput();
+      
+      // 快捷鍵：Ctrl+P (或 Cmd+P) 切換預覽模式
+      if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
+        event.preventDefault();
+        setIsPreviewMode(prev => !prev);
+        toast.success(`${isPreviewMode ? '已關閉' : '已開啟'}分屏預覽`);
+      }
+      
+      // 快捷鍵：Ctrl+S (或 Cmd+S) 手動保存
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        handleManualSave();
+      }
+    };
+    
     // 监听各种用户输入事件
-    const events = ['keydown', 'mousedown', 'input', 'paste'];
+    const events = ['mousedown', 'input', 'paste'];
     events.forEach(event => {
       document.addEventListener(event, handleUserInput, true);
     });
+    
+    // 單獨處理鍵盤事件以支持快捷鍵
+    document.addEventListener('keydown', handleKeyDown, true);
     
     return () => {
       events.forEach(event => {
         document.removeEventListener(event, handleUserInput, true);
       });
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, []);
+  }, [isPreviewMode]); // 移除 handleManualSave 依賴以避免循環依賴
 
   // 处理内容变化
   const handleContentChange = useCallback((editorState: EditorState) => {
@@ -587,38 +615,16 @@ export function CollaborativeLexicalEditor({
     }
   }, [content, updateEditorContent]);
 
-  // 创建版本
-  const handleCreateVersion = useCallback(async (versionContent: string) => {
-    try {
-      const response = await fetch(`/api/v1/documents/${documentId}/versions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          content: versionContent,
-          change_description: '自动版本保存'
-        })
-      });
-
-      if (response.ok) {
-        console.log('Version created successfully');
-        // 刷新版本历史
-        loadVersionHistory();
-      }
-    } catch (error) {
-      console.error('Failed to create version:', error);
-    }
-  }, [documentId]);
-
+  const token = localStorage.getItem('session_token');
   // 加载版本历史
   const loadVersionHistory = useCallback(async () => {
     try {
-      const response = await fetch(`/api/v1/documents/${documentId}/versions`, {
+      const response = await fetch(`http://localhost:8000/v1/documents/${documentId}/versions?limit=10`,  {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
 
       if (response.ok) {
@@ -637,8 +643,9 @@ export function CollaborativeLexicalEditor({
       const response = await fetch(`/api/v1/documents/${documentId}/versions/${versionNumber}/restore`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
       });
 
       if (response.ok) {
@@ -711,12 +718,6 @@ export function CollaborativeLexicalEditor({
             )}
           </div>
 
-          {/* 版本信息 */}
-          {documentState && (
-            <div className="text-sm text-gray-500">
-              版本: {documentState.version}
-            </div>
-          )}
 
           {/* 最后同步时间 */}
           {lastSyncTime && (
@@ -751,21 +752,13 @@ export function CollaborativeLexicalEditor({
           <button
             onClick={() => setIsPreviewMode(prev => !prev)}
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            title="切换预览模式"
+            title="切换分屏预览模式 (Ctrl+P)"
           >
             {isPreviewMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            <span>{isPreviewMode ? '编辑' : '预览'}</span>
+            <span>{isPreviewMode ? '纯编辑' : '分屏预览'}</span>
           </button>
           
-          <button
-            onClick={handleSync}
-            disabled={!isOnline}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
-            title="手动同步文档"
-          >
-            <RefreshCw className="h-4 w-4" />
-            <span>同步</span>
-          </button>
+
           
           <button
             onClick={handleManualSave}
@@ -824,9 +817,10 @@ export function CollaborativeLexicalEditor({
           </div>
         )}
 
-        {/* 编辑器区域 */}
-        {!isPreviewMode && (
-          <div className="flex-1">
+        {/* 主編輯區域 */}
+        <div className="flex-1 flex">
+          {/* 编辑器區域 */}
+          <div className={`${isPreviewMode ? 'w-1/2 border-r border-gray-200' : 'flex-1'} transition-all duration-300`}>
             <LexicalComposer initialConfig={initialConfig}>
               <div className="editor-container h-full">
                 <RichTextPlugin
@@ -842,7 +836,7 @@ export function CollaborativeLexicalEditor({
                   }
                   placeholder={
                     <div className="editor-placeholder absolute top-8 left-8 text-gray-400 pointer-events-none">
-                      开始编写您的文档...
+                      开始编写您的文档...支持 Markdown 語法
                     </div>
                   }
                   ErrorBoundary={LexicalErrorBoundary}
@@ -882,18 +876,20 @@ export function CollaborativeLexicalEditor({
               </div>
             </LexicalComposer>
           </div>
-        )}
 
-        {/* 预览区域 */}
-        {isPreviewMode && (
-          <div className="flex-1 overflow-auto">
-            <div className="p-8 prose prose-lg max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || '# 开始编写您的文档\n\n在这里输入您的 Markdown 内容...'}
-              </ReactMarkdown>
+          {/* 实时预览区域 - 只在預覽模式下顯示 */}
+          {isPreviewMode && (
+            <div className="w-1/2 overflow-auto bg-gray-50">
+              <div className="p-8 prose prose-lg max-w-none bg-white m-4 rounded-lg shadow-sm">
+                <div className="markdown-preview">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {content || '# 开始编写您的文档\n\n在左側編輯器中輸入 Markdown 內容，右側會實時顯示渲染效果...'}
+                  </ReactMarkdown>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* 底部状态栏 */}
@@ -926,6 +922,12 @@ export function CollaborativeLexicalEditor({
           <span>ShareDB 协作</span>
           <span>•</span>
           <span>{isOnline ? '在线' : '离线'}</span>
+          {isPreviewMode && (
+            <>
+              <span>•</span>
+              <span className="text-green-600">分屏预览模式</span>
+            </>
+          )}
           {hasCollaborativeUpdates && (
             <>
               <span>•</span>

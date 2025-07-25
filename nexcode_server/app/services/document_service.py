@@ -99,10 +99,25 @@ class DocumentService:
                 sharedb_doc = await sharedb_service.get_document(str(document_id))
                 content = sharedb_doc.get("content", "")
                 version = sharedb_doc.get("version", 0)
+                
+                # 如果 ShareDB 中的内容为空且 PostgreSQL 中有内容，则同步
+                if not content and document.content:
+                    logger.info(f"ShareDB content is empty, syncing from PostgreSQL for document {document_id}")
+                    await sharedb_service.sync_document(
+                        doc_id=str(document_id),
+                        version=document.version,
+                        content=document.content,
+                        user_id=user_id,
+                        create_version=False
+                    )
+                    content = document.content
+                    version = document.version
+                    
             except Exception as e:
                 logger.warning(f"Failed to get content from ShareDB: {e}")
                 # 降级到 PostgreSQL 内容（如果有）
                 content = document.content
+                version = document.version
 
         return {
             "id": document.id,

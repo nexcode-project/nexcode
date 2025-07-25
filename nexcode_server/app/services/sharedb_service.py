@@ -62,7 +62,8 @@ class ShareDBService:
             )
             
             if not doc:
-                # 创建新文档
+                # 检查是否应该从 PostgreSQL 同步内容
+                # 这里我们创建一个空文档，让调用方决定是否同步
                 doc = {
                     "doc_id": doc_id,
                     "content": "",
@@ -73,7 +74,7 @@ class ShareDBService:
                 }
                 result = self.documents.insert_one(doc)
                 doc["_id"] = result.inserted_id
-                logger.info(f"Created new document {doc_id}")
+                logger.info(f"Created new empty document {doc_id} in ShareDB")
             
             return {
                 "doc_id": doc["doc_id"],

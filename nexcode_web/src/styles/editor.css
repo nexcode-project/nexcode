@@ -332,3 +332,127 @@
     height: 1.75rem;
   }
 } 
+
+/* 實時預覽樣式 */
+.markdown-preview {
+  line-height: 1.7;
+  color: #374151;
+}
+
+.markdown-preview h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.markdown-preview h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.markdown-preview h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #374151;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.markdown-preview p {
+  margin-bottom: 1rem;
+}
+
+.markdown-preview ul, .markdown-preview ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.markdown-preview li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-preview blockquote {
+  border-left: 4px solid #3b82f6;
+  background: #f8fafc;
+  padding: 1rem 1.5rem;
+  margin: 1.5rem 0;
+  border-radius: 0 0.375rem 0.375rem 0;
+}
+
+.markdown-preview code {
+  background: #f1f5f9;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem;
+  color: #dc2626;
+}
+
+.markdown-preview pre {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.markdown-preview pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.markdown-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.markdown-preview th, .markdown-preview td {
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.markdown-preview th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.markdown-preview a {
+  color: #3b82f6;
+  text-decoration: underline;
+  text-decoration-color: #93c5fd;
+}
+
+.markdown-preview a:hover {
+  color: #1d4ed8;
+  text-decoration-color: #3b82f6;
+}
+
+/* 實時預覽容器動畫 */
+.markdown-preview {
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* 同步更新提示動畫 */
+@keyframes pulse-sync {
+  0%, 100% { 
+    opacity: 1; 
+  }
+  50% { 
+    opacity: 0.7; 
+    transform: scale(0.98);
+  }
+}
+
+.sync-updating .markdown-preview {
+  animation: pulse-sync 0.5s ease-in-out;
+} 
