@@ -1,4 +1,5 @@
-import { api } from '@/lib/api';
+import { api, apiService } from '@/services/api';
+import type { DocumentState as ApiDocumentState, ShareDBSyncResponse } from '@/types/api';
 
 export interface DocumentState {
   doc_id: string;
@@ -66,8 +67,7 @@ export class ShareDBClient {
    */
   async getDocument(): Promise<DocumentState> {
     try {
-      const response = await api.get(`/v1/sharedb/documents/${this.docId}`);
-      const docState = response.data as DocumentState;
+      const docState = await apiService.getShareDBDocument(this.docId);
       
       this.currentVersion = docState.version;
       this.currentContent = docState.content;

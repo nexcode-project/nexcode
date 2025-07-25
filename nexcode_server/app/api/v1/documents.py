@@ -242,6 +242,22 @@ async def get_document_versions(
     
     version_responses = []
     for version in versions:
+        # 获取用户信息
+        user = await auth_service.get_user_by_id(db, version.changed_by)
+        if not user:
+            # 如果用户不存在，创建一个默认的用户信息
+            user_info = UserInfo(
+                id=version.changed_by,
+                username="未知用户",
+                email=None
+            )
+        else:
+            user_info = UserInfo(
+                id=user.id,
+                username=user.username,
+                email=user.email
+            )
+        
         version_response = DocumentVersionResponse(
             id=version.id,
             version_number=version.version_number,
@@ -249,7 +265,7 @@ async def get_document_versions(
             content=version.content,
             change_description=version.change_description,
             created_at=version.created_at,
-            changed_by=version.changed_by
+            changed_by=user_info
         )
         version_responses.append(version_response)
     

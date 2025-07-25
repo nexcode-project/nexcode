@@ -18,6 +18,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { ShareDBClient, DocumentState } from '@/services/sharedb';
+import { apiService } from '@/services/api';
 // 假设导入 authStore，如果项目有
 import { useAuthStore } from '@/store/authStore';  // 如果没有，忽略这行
 
@@ -358,16 +359,8 @@ function IntelligentSyncPlugin({
   return null;
 }
 
-// 版本历史接口
-interface DocumentVersion {
-  id: number;
-  version_number: number;
-  title: string;
-  content: string;
-  changed_by: number;
-  change_description: string;
-  created_at: string;
-}
+// 使用統一的 API 類型
+import type { DocumentVersion } from '@/types/api';
 
 interface CollaborativeLexicalEditorProps {
   documentId: number;
@@ -615,22 +608,11 @@ export function CollaborativeLexicalEditor({
     }
   }, [content, updateEditorContent]);
 
-  const token = localStorage.getItem('session_token');
   // 加载版本历史
   const loadVersionHistory = useCallback(async () => {
     try {
-      const response = await fetch(`http://localhost:8000/v1/documents/${documentId}/versions?limit=10`,  {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setVersionHistory(data.versions || []);
-      }
+      const response = await apiService.getDocumentVersions(documentId, 10);
+      setVersionHistory(response.versions || []);
     } catch (error) {
       console.error('Failed to load version history:', error);
       toast.error('加载版本历史失败');
@@ -640,25 +622,15 @@ export function CollaborativeLexicalEditor({
   // 恢复版本
   const handleRestoreVersion = useCallback(async (versionNumber: number) => {
     try {
-      const response = await fetch(`/api/v1/documents/${documentId}/versions/${versionNumber}/restore`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setContent(data.content);
-        updateEditorContent(data.content);
-        setShowVersionHistory(false);
-        toast.success('版本已恢复');
-        
-        // 同步到ShareDB
-        if (sharedbClientRef.current) {
-          await sharedbClientRef.current.syncDocument(data.content);
-        }
+      const data = await apiService.restoreDocumentVersion(documentId, versionNumber);
+      setContent(data.content);
+      updateEditorContent(data.content);
+      setShowVersionHistory(false);
+      toast.success('版本已恢复');
+      
+      // 同步到ShareDB
+      if (sharedbClientRef.current) {
+        await sharedbClientRef.current.syncDocument(data.content);
       }
     } catch (error) {
       console.error('Failed to restore version:', error);
