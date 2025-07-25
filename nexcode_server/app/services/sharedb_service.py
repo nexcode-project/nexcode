@@ -206,17 +206,18 @@ class ShareDBService:
                            user_id: int, create_version: bool = False, db_session: AsyncSession = None) -> dict:
         """同步文档到ShareDB，可选创建PostgreSQL版本快照"""
         lock = self._get_doc_lock(doc_id)
-        if create_version:
-            version = version + 1
         async with lock:
             try:
+                # ShareDB 版本号始终递增（用于协作同步检测）
+                new_sharedb_version = version + 1
+                
                 # 1. 更新 ShareDB (MongoDB) 中的文档内容
                 result = self.documents.update_one(
                     {"doc_id": doc_id},
                     {
                         "$set": {
                             "content": content,
-                            "version": version,
+                            "version": new_sharedb_version,  # ShareDB 版本总是递增
                             "updated_at": datetime.utcnow(),
                             "last_editor_id": user_id
                         }
@@ -227,7 +228,7 @@ class ShareDBService:
                 # 2. 记录操作历史
                 operation = {
                     "doc_id": doc_id,
-                    "version": version,
+                    "version": new_sharedb_version,
                     "content": content,
                     "user_id": user_id,
                     "timestamp": datetime.utcnow(),
@@ -238,13 +239,15 @@ class ShareDBService:
                 # 3. 可选：在PostgreSQL中创建版本快照（用于长期存储和恢复）
                 if create_version and db_session:
                     await self._create_version_snapshot(
-                        db_session, doc_id, content, user_id, version
+                        db_session, doc_id, content, user_id, new_sharedb_version
                     )
+                
+                logger.info(f"Document {doc_id} synced: ShareDB v{new_sharedb_version}, PostgreSQL snapshot: {create_version}")
                 
                 return {
                     "success": True,
                     "content": content,
-                    "version": version,
+                    "version": new_sharedb_version,  # 返回新的 ShareDB 版本号
                     "operations": []
                 }
             except Exception as e:

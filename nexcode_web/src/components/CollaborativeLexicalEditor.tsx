@@ -116,7 +116,8 @@ function IntelligentSyncPlugin({
   setDocumentState,
   updateEditorContent,
   onContentChange,
-  onCollaborativeUpdate
+  onCollaborativeUpdate,
+  sharedbClient
 }: {
   documentId: number;
   content: string;
@@ -125,6 +126,7 @@ function IntelligentSyncPlugin({
   updateEditorContent: (content: string) => void;
   onContentChange?: (synced: boolean) => void;
   onCollaborativeUpdate?: (hasUpdates: boolean) => void;
+  sharedbClient: ShareDBClient;
 }) {
   const [editor] = useLexicalComposerContext(); // 获取编辑器实例
   const syncTimer = useRef<NodeJS.Timeout>();
@@ -160,35 +162,16 @@ function IntelligentSyncPlugin({
     syncInProgress.current = true;
     
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No auth token found');
-        return false;
-      }
-
       console.log('Syncing content:', {
         length: actualContent.length,
         version: documentState?.version || 0,
         createVersion
       });
 
-      const response = await fetch('/v1/sharedb/documents/sync', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          doc_id: documentId.toString(),
-          version: documentState?.version || 0,
-          content: actualContent,
-          create_version: createVersion
-        })
-      });
+      // 使用 ShareDBClient 进行同步
+      const result = await sharedbClient.syncDocument(actualContent);
 
-      if (response.ok) {
-        const result = await response.json();
-        
+      if (result.success) {
         // 更新文档状态
         if (documentState) {
           setDocumentState({
@@ -223,7 +206,7 @@ function IntelligentSyncPlugin({
         
         return true;
       } else {
-        console.error('Sync failed:', response.statusText);
+        console.error('Sync failed:', result.error);
         return false;
       }
     } catch (error) {
@@ -232,72 +215,62 @@ function IntelligentSyncPlugin({
     } finally {
       syncInProgress.current = false;
     }
-  }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, onCollaborativeUpdate, getCurrentEditorContent]);
+  }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, onCollaborativeUpdate, getCurrentEditorContent, sharedbClient]);
 
   // 轮询检查其他用户的更新
   const pollForUpdates = useCallback(async () => {
     if (syncInProgress.current) return;
     
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      // 获取服务器最新状态
-      const response = await fetch(`/v1/sharedb/documents/${documentId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const serverState = await response.json();
+      // 使用 ShareDBClient 获取最新文档状态
+      const serverState = await sharedbClient.getDocument();
+      
+      // 检查版本是否有更新
+      if (serverState.version > (documentState?.version || 0)) {
+        console.log('New version detected from other users:', serverState.version);
         
-        // 检查版本是否有更新
-        if (serverState.version > (documentState?.version || 0)) {
-          console.log('New version detected from other users:', serverState.version);
+        // 如果用户当前没有在编辑，直接更新内容
+        if (!isUserEditing.current || Date.now() - lastUserInputTime.current > 5000) {
+          setDocumentState({
+            doc_id: serverState.doc_id,
+            content: serverState.content,
+            version: serverState.version,
+            created_at: serverState.created_at,
+            updated_at: serverState.updated_at
+          });
           
-          // 如果用户当前没有在编辑，直接更新内容
-          if (!isUserEditing.current || Date.now() - lastUserInputTime.current > 5000) {
-            setDocumentState({
-              doc_id: serverState.doc_id,
-              content: serverState.content,
-              version: serverState.version,
-              created_at: serverState.created_at,
-              updated_at: serverState.updated_at
-            });
-            
-            updateEditorContent(serverState.content);
-            lastSyncedContent.current = serverState.content;
-            onCollaborativeUpdate?.(true); // 通知有协作更新
-            
-            console.log('Updated content from collaborative changes');
-          } else {
-            // 用户正在编辑，执行合并同步
-            console.log('User is editing, performing merge sync');
-            await performSync(undefined, false); // 使用当前编辑器内容
-          }
-        }
-        
-        // 动态调整轮询间隔并重启定时器
-        const newInterval = isUserEditing.current ? 3000 : Math.min(pollInterval.current * 1.1, 15000);
-        if (newInterval !== pollInterval.current) {
-          pollInterval.current = newInterval;
+          updateEditorContent(serverState.content);
+          lastSyncedContent.current = serverState.content;
+          onCollaborativeUpdate?.(true); // 通知有协作更新
           
-          // 重启轮询定时器以使用新间隔
-          if (pollTimer.current) {
-            clearInterval(pollTimer.current);
-            console.log('Restarting polling with new interval:', pollInterval.current);
-            pollTimer.current = setInterval(pollForUpdates, pollInterval.current);
-          }
+          console.log('Updated content from collaborative changes');
+        } else {
+          // 用户正在编辑，执行合并同步
+          console.log('User is editing, performing merge sync');
+          await performSync(undefined, false); // 使用当前编辑器内容
         }
-        
-        onContentChange?.(true);
       }
+      
+      // 动态调整轮询间隔并重启定时器
+      const newInterval = isUserEditing.current ? 3000 : Math.min(pollInterval.current * 1.1, 15000);
+      if (newInterval !== pollInterval.current) {
+        pollInterval.current = newInterval;
+        
+        // 重启轮询定时器以使用新间隔
+        if (pollTimer.current) {
+          clearInterval(pollTimer.current);
+          console.log('Restarting polling with new interval:', pollInterval.current);
+          pollTimer.current = setInterval(pollForUpdates, pollInterval.current);
+        }
+      }
+      
+      onContentChange?.(true);
+      
     } catch (error) {
-      console.error('Poll for updates failed:', error);
-      onContentChange?.(false);
+      console.error('Failed to poll for updates:', error);
+      onContentChange?.(false); // 通知网络问题
     }
-  }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, performSync, onCollaborativeUpdate]);
+  }, [documentId, documentState, setDocumentState, updateEditorContent, onContentChange, performSync, onCollaborativeUpdate, sharedbClient]);
 
   // 轮询其他用户更新 - 只在组件挂载时启动一次
   useEffect(() => {
@@ -438,58 +411,28 @@ export function CollaborativeLexicalEditor({
 
     const loadDocument = async () => {
       try {
-        // 1. 首先从ShareDB获取基础文档状态
-        const docState = await client.getDocument();
-        console.log('Initial document state from ShareDB:', docState);
+        // 使用 ShareDBClient 强制与服务器同步，获取最新版本
+        const syncResult = await client.forceSyncWithServer();
+        console.log('Force sync result:', syncResult);
         
-        // 2. 强制与服务器同步，确保获取最新版本
-        const token = localStorage.getItem('token');
-        if (token) {
-          try {
-            // 获取服务器上的最新状态
-            const response = await fetch(`/v1/sharedb/documents/${documentId}`, {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            });
-            
-            if (response.ok) {
-              const latestState = await response.json();
-              console.log('Latest server state:', latestState);
-              
-              // 如果服务器版本更新，使用服务器内容
-              if (latestState.version >= docState.version) {
-                setDocumentState({
-                  doc_id: latestState.doc_id,
-                  content: latestState.content,
-                  version: latestState.version,
-                  created_at: latestState.created_at,
-                  updated_at: latestState.updated_at
-                });
-                setContent(latestState.content || initialContent);
-                console.log('Using latest server content');
-              } else {
-                // 使用ShareDB的内容
-                setDocumentState(docState);
-                setContent(docState.content || initialContent);
-                console.log('Using ShareDB content');
-              }
-            } else {
-              // 降级到ShareDB内容
-              setDocumentState(docState);
-              setContent(docState.content || initialContent);
-              console.log('Using ShareDB content (server unavailable)');
-            }
-          } catch (fetchError) {
-            console.warn('Failed to fetch latest server state:', fetchError);
-            // 降级到ShareDB内容
-            setDocumentState(docState);
-            setContent(docState.content || initialContent);
-          }
+        if (syncResult.success) {
+          setDocumentState({
+            doc_id: documentId.toString(),
+            content: syncResult.content,
+            version: syncResult.version,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+          setContent(syncResult.content || initialContent);
+          console.log('Using synced server content');
         } else {
-          // 没有token，使用ShareDB内容
+          // 降级：尝试直接获取文档状态
+          const docState = await client.getDocument();
+          console.log('Fallback to document state:', docState);
+          
           setDocumentState(docState);
           setContent(docState.content || initialContent);
+          console.log('Using fallback ShareDB content');
         }
         
         setIsLoading(false);
@@ -930,6 +873,7 @@ export function CollaborativeLexicalEditor({
                         setTimeout(() => setHasCollaborativeUpdates(false), 3000);
                       }
                     }}
+                    sharedbClient={sharedbClientRef.current}
                   />
                 )}
                 
