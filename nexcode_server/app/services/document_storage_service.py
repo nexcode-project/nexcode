@@ -166,7 +166,7 @@ class DocumentStorageService:
             return []
 
     async def create_version_snapshot(self, document_id: int, user_id: int, description: str):
-        """创建版本快照"""
+        """创建版本快照 - 只有内容真正变化时才创建"""
         try:
             async for db in get_db():
                 # 获取当前文档
@@ -177,6 +177,24 @@ class DocumentStorageService:
                 if not document:
                     return False
                 
+                # 计算当前内容的哈希值
+                current_content_hash = hashlib.md5(document.content.encode()).hexdigest()
+                
+                # 检查最新版本的内容哈希
+                latest_version_stmt = (
+                    select(DocumentVersion.content_hash)
+                    .where(DocumentVersion.document_id == document_id)
+                    .order_by(desc(DocumentVersion.version_number))
+                    .limit(1)
+                )
+                latest_result = await db.execute(latest_version_stmt)
+                latest_hash = latest_result.scalar()
+                
+                # 如果内容哈希相同，说明内容没有变化，跳过创建版本
+                if latest_hash == current_content_hash:
+                    print(f"📝 文档内容未变化，跳过版本快照: document_id={document_id}")
+                    return True  # 返回True表示操作成功，但没有创建新版本
+                
                 # 获取下一个版本号
                 max_version_stmt = select(func.max(DocumentVersion.version_number)).where(
                     DocumentVersion.document_id == document_id
@@ -185,21 +203,20 @@ class DocumentStorageService:
                 max_version = max_version_result.scalar() or 0
                 next_version = max_version + 1
                 
-                # 创建新版本
-                content_hash = hashlib.md5(document.content.encode()).hexdigest()
+                # 内容有变化，创建新版本
                 new_version = DocumentVersion(
                     document_id=document_id,
                     version_number=next_version,
                     title=document.title,
                     content=document.content,
-                    content_hash=content_hash,  # 添加内容哈希
+                    content_hash=current_content_hash,
                     changed_by=user_id,
                     change_description=description
                 )
                 
                 db.add(new_version)
                 await db.commit()
-                print(f"✅ 版本快照已创建: document_id={document_id}, version={next_version}")
+                print(f"✅ 版本快照已创建（内容变化）: document_id={document_id}, version={next_version}")
                 return True
                 
         except Exception as e:
@@ -207,7 +224,7 @@ class DocumentStorageService:
             return False
 
     async def create_version_snapshot_with_content(self, document_id: int, user_id: int, description: str, content: str):
-        """使用指定内容创建版本快照"""
+        """使用指定内容创建版本快照 - 只有内容真正变化时才创建"""
         try:
             async for db in get_db():
                 # 获取当前文档
@@ -218,6 +235,24 @@ class DocumentStorageService:
                 if not document:
                     return False
                 
+                # 计算新内容的哈希值
+                new_content_hash = hashlib.md5(content.encode()).hexdigest()
+                
+                # 检查最新版本的内容哈希
+                latest_version_stmt = (
+                    select(DocumentVersion.content_hash)
+                    .where(DocumentVersion.document_id == document_id)
+                    .order_by(desc(DocumentVersion.version_number))
+                    .limit(1)
+                )
+                latest_result = await db.execute(latest_version_stmt)
+                latest_hash = latest_result.scalar()
+                
+                # 如果内容哈希相同，说明内容没有变化，跳过创建版本
+                if latest_hash == new_content_hash:
+                    print(f"📝 指定内容未变化，跳过版本快照: document_id={document_id}")
+                    return True  # 返回True表示操作成功，但没有创建新版本
+                
                 # 获取下一个版本号
                 max_version_stmt = select(func.max(DocumentVersion.version_number)).where(
                     DocumentVersion.document_id == document_id
@@ -226,21 +261,20 @@ class DocumentStorageService:
                 max_version = max_version_result.scalar() or 0
                 next_version = max_version + 1
                 
-                # 创建新版本
-                content_hash = hashlib.md5(content.encode()).hexdigest()
+                # 内容有变化，创建新版本
                 new_version = DocumentVersion(
                     document_id=document_id,
                     version_number=next_version,
                     title=document.title,
                     content=content,  # 使用提供的内容
-                    content_hash=content_hash,  # 添加内容哈希
+                    content_hash=new_content_hash,
                     changed_by=user_id,
                     change_description=description
                 )
                 
                 db.add(new_version)
                 await db.commit()
-                print(f"✅ 版本快照已创建（指定内容）: document_id={document_id}, version={next_version}")
+                print(f"✅ 版本快照已创建（指定内容变化）: document_id={document_id}, version={next_version}")
                 return True
                 
         except Exception as e:

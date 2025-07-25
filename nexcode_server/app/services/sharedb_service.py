@@ -263,26 +263,51 @@ class ShareDBService:
     
     async def _create_version_snapshot(self, db_session: AsyncSession, doc_id: str, 
                                      content: str, user_id: int, version: int):
-        """在PostgreSQL中创建版本快照（仅用于长期存储）"""
+        """在PostgreSQL中创建版本快照（仅用于长期存储）- 只有内容真正变化时才创建"""
         try:
+            from sqlalchemy import select, func, desc
+            
             # 获取文档元数据
-            from sqlalchemy import select
             stmt = select(Document).where(Document.id == int(doc_id))
             result = await db_session.execute(stmt)
             document = result.scalar_one_or_none()
             
-            content_hash = hashlib.md5(content.encode()).hexdigest()
+            if not document:
+                logger.warning(f"Document {doc_id} not found, skipping snapshot")
+                return
+            
+            # 计算新内容的哈希值
+            new_content_hash = hashlib.md5(content.encode()).hexdigest()
+            
+            # 检查最新版本的内容哈希
+            latest_version_stmt = (
+                select(DocumentVersion.content_hash)
+                .where(DocumentVersion.document_id == int(doc_id))
+                .order_by(desc(DocumentVersion.version_number))
+                .limit(1)
+            )
+            latest_result = await db_session.execute(latest_version_stmt)
+            latest_hash = latest_result.scalar()
+            
+            # 如果内容哈希相同，说明内容没有变化，跳过创建版本
+            if latest_hash == new_content_hash:
+                logger.info(f"Document {doc_id} content unchanged (hash: {new_content_hash}), skipping snapshot")
+                return
+                
+            # 内容有变化，创建新版本快照
             snapshot = DocumentVersion(
                 document_id=int(doc_id),
                 version_number=version,
                 title=document.title,
                 content=content,
-                content_hash=content_hash,
+                content_hash=new_content_hash,
                 changed_by=user_id,
                 change_description=f"自动快照 - 版本 {version}",
             )
             db_session.add(snapshot)
             await db_session.commit()
+            logger.info(f"✅ Version snapshot created for document {doc_id}, version {version} (content changed)")
+            
         except Exception as e:
             logger.warning(f"Failed to create version snapshot: {e}")
     
