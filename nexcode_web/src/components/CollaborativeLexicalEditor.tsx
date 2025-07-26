@@ -16,6 +16,8 @@ import { Eye, EyeOff, Save, Wifi, WifiOff, Users, RefreshCw, Clock, History, Fil
 import { toast } from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { $generateNodesFromDOM } from '@lexical/html';
+import { $generateHtmlFromNodes } from '@lexical/html';
 
 import { ShareDBClient, DocumentState } from '@/services/sharedb';
 import { apiService } from '@/services/api';
@@ -109,6 +111,40 @@ function LexicalErrorBoundary({ onError }: { onError: (error: Error) => void }) 
   return null;
 }
 
+// 从Lexical状态中提取文本内容的辅助函数
+function extractTextFromLexicalState(lexicalState: any): string {
+  try {
+    if (!lexicalState || !lexicalState.root || !lexicalState.root.children) {
+      return '';
+    }
+    
+    let text = '';
+    
+    const extractTextFromNode = (node: any): void => {
+      if (node.type === 'text') {
+        text += node.text || '';
+      } else if (node.children && Array.isArray(node.children)) {
+        node.children.forEach((child: any) => {
+          extractTextFromNode(child);
+        });
+        // 在段落和其他块级元素后添加换行
+        if (node.type === 'paragraph' || node.type === 'heading') {
+          text += '\n';
+        }
+      }
+    };
+    
+    lexicalState.root.children.forEach((child: any) => {
+      extractTextFromNode(child);
+    });
+    
+    return text.trim();
+  } catch (error) {
+    console.error('Failed to extract text from Lexical state:', error);
+    return '';
+  }
+}
+
 // 统一的智能同步插件 - 替换所有原有的同步插件
 function IntelligentSyncPlugin({
   documentId,
@@ -139,14 +175,22 @@ function IntelligentSyncPlugin({
   const lastSyncedContent = useRef<string>('');
   const syncInProgress = useRef<boolean>(false);
 
-  // 获取当前编辑器内容
+  // 获取当前编辑器内容 - 使用JSON序列化保持完整格式
   const getCurrentEditorContent = useCallback(() => {
     if (!editor) return content;
     
     let editorContent = '';
     editor.getEditorState().read(() => {
-      const root = $getRoot();
-      editorContent = root.getTextContent();
+      try {
+        // 使用JSON序列化获取完整的编辑器状态
+        const editorStateJSON = editor.getEditorState().toJSON();
+        editorContent = JSON.stringify(editorStateJSON);
+      } catch (error) {
+        console.error('Failed to serialize editor state:', error);
+        // 降级为纯文本
+        const root = $getRoot();
+        editorContent = root.getTextContent();
+      }
     });
     
     return editorContent || content;
@@ -162,7 +206,7 @@ function IntelligentSyncPlugin({
     syncInProgress.current = true;
     
     try {
-      console.log('Syncing content:', { length: currentContent.length });
+      console.log('Syncing Lexical content:', { length: currentContent.length });
       const result = await sharedbClient.syncDocument(currentContent);
 
       if (result.success) {
@@ -184,7 +228,7 @@ function IntelligentSyncPlugin({
         }
         
         onContentChange?.(true);
-        console.log('Content synced successfully');
+        console.log('Lexical content synced successfully');
       } else {
         console.error('Sync failed:', result.error);
         onContentChange?.(false);
@@ -226,7 +270,7 @@ function IntelligentSyncPlugin({
             // 用户没有在编辑，直接更新
             updateEditorContent(serverState.content);
             lastSyncedContent.current = serverState.content;
-            console.log('Applied collaborative changes');
+            console.log('Applied collaborative Lexical changes');
           } else {
             // 用户正在编辑，标记有协作更新但不立即应用
             console.log('Deferred collaborative update due to user editing');
@@ -243,34 +287,62 @@ function IntelligentSyncPlugin({
     }
   }, [documentState, setDocumentState, updateEditorContent, onContentChange, onCollaborativeUpdate, sharedbClient, setHasCollaborativeUpdates]);
 
-  // 启动轮询 - 每10秒一次
+  // 使用ref确保轮询函数总是访问最新状态
+  const pollForUpdatesRef = useRef(pollForUpdates);
+  pollForUpdatesRef.current = pollForUpdates;
+
+  // 启动轮询 - 固定每10秒一次获取其他用户变更
   useEffect(() => {
-    console.log('Starting document polling every 10 seconds');
-    pollTimer.current = setInterval(pollForUpdates, 10000);
+    console.log('Starting document polling every 10 seconds - fixed interval');
+    
+    // 立即执行一次
+    pollForUpdatesRef.current();
+    
+    // 设置固定间隔轮询，不受任何其他操作影响
+    pollTimer.current = setInterval(() => {
+      console.log('Polling for remote changes...');
+      pollForUpdatesRef.current();
+    }, 10000); // 固定10秒
 
     return () => {
       if (pollTimer.current) {
         clearInterval(pollTimer.current);
       }
     };
-  }, [pollForUpdates]);
+  }, []); // 空依赖数组，确保只初始化一次，不会被重置
 
-  // 用户编辑检测 - 3秒后同步
+  // 用户编辑检测 - 使用固定间隔避免频繁重置
   useEffect(() => {
-    const currentContent = getCurrentEditorContent();
-    
-    // 清除之前的同步定时器
-    if (syncTimer.current) {
-      clearTimeout(syncTimer.current);
-    }
-
-    // 如果内容有变化，3秒后同步
-    if (currentContent !== lastSyncedContent.current) {
-      console.log('Content changed, scheduling sync in 3 seconds');
+    // 启动一个固定的同步检查定时器，而不是每次内容变化都重置
+    const startSyncCheck = () => {
       syncTimer.current = setTimeout(() => {
-        performSync();
-      }, 3000);
-    }
+        const currentContent = getCurrentEditorContent();
+        
+        // 检查是否需要同步
+        if (currentContent !== lastSyncedContent.current) {
+          const contentDiff = Math.abs(currentContent.length - lastSyncedContent.current.length);
+          const timeSinceLastInput = Date.now() - lastUserInputTimeRef.current;
+          
+          // 只在用户停止编辑2秒后且内容有变化时同步
+          if (timeSinceLastInput > 2000 && contentDiff > 0) {
+            console.log('Content changed and user stopped editing, syncing now');
+            performSync().finally(() => {
+              // 同步完成后，重新启动检查定时器
+              startSyncCheck();
+            });
+          } else {
+            // 继续检查
+            startSyncCheck();
+          }
+        } else {
+          // 没有变化，继续检查
+          startSyncCheck();
+        }
+      }, 3000); // 每3秒检查一次
+    };
+
+    // 启动检查
+    startSyncCheck();
 
     return () => {
       if (syncTimer.current) {
@@ -324,6 +396,7 @@ export function CollaborativeLexicalEditor({
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [versionHistory, setVersionHistory] = useState<DocumentVersion[]>([]);
   const [hasCollaborativeUpdates, setHasCollaborativeUpdates] = useState(false); // 协作更新指示
+  const [previewContent, setPreviewContent] = useState(''); // 用于预览的可读文本内容
   
   // 移除不再需要的状态
   // const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
@@ -334,6 +407,19 @@ export function CollaborativeLexicalEditor({
   const sharedbClientRef = useRef<ShareDBClient>();
   const editorRef = useRef<any>();
   const lastUserInputTimeRef = useRef<number>(Date.now()); // 用于跟踪用户输入时间
+
+  // 获取可读文本内容用于预览和显示
+  const getReadableContent = useCallback(() => {
+    if (!editorRef.current) return '';
+    
+    let textContent = '';
+    editorRef.current.getEditorState().read(() => {
+      const root = $getRoot();
+      textContent = root.getTextContent();
+    });
+    
+    return textContent;
+  }, []);
 
   // 初始化 ShareDB 客户端并加载文档
   useEffect(() => {
@@ -357,9 +443,38 @@ export function CollaborativeLexicalEditor({
         
         setDocumentState(docState);
         setContent(finalContent);
+        
+        // 设置初始预览内容
+        try {
+          const lexicalState = JSON.parse(finalContent);
+          if (lexicalState && typeof lexicalState === 'object' && lexicalState.root) {
+            // 如果是JSON格式，尝试从Lexical状态中提取文本内容
+            try {
+              const textContent = extractTextFromLexicalState(lexicalState);
+              setPreviewContent(textContent);
+              console.log('Initial preview content set from Lexical state:', textContent.length);
+            } catch {
+              setPreviewContent('正在加载编辑器内容...');
+            }
+          } else {
+            setPreviewContent(finalContent);
+            console.log('Initial preview content set as plain text:', finalContent.length);
+          }
+        } catch {
+          // 纯文本内容
+          setPreviewContent(finalContent);
+          console.log('Initial preview content set as plain text (fallback):', finalContent.length);
+        }
+        
         setIsLoading(false);
         setLastSyncTime(new Date());
         setIsOnline(true);
+        
+        console.log('Document loaded successfully:', {
+          contentLength: finalContent.length,
+          version: docState?.version,
+          hasInitialDocumentState: !!initialDocumentState
+        });
         
       } catch (error) {
         console.error('Failed to load document:', error);
@@ -374,6 +489,10 @@ export function CollaborativeLexicalEditor({
 
     return () => {
       client.destroy();
+      // 清理防抖定时器
+      if (contentChangeTimeoutRef.current) {
+        clearTimeout(contentChangeTimeoutRef.current);
+      }
     };
   }, [documentId, initialContent, initialDocumentState]);
 
@@ -387,14 +506,21 @@ export function CollaborativeLexicalEditor({
       toast.error('编辑器错误');
     },
     editorState: content ? (() => {
-      // 如果有內容，創建包含該內容的初始狀態
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(content, 'text/html');
-      return undefined; // 暫時使用 undefined，稍後通過 updateEditorContent 設置
+      try {
+        // 尝试解析JSON格式的Lexical状态
+        const lexicalState = JSON.parse(content);
+        if (lexicalState && typeof lexicalState === 'object' && lexicalState.root) {
+          // 如果是有效的Lexical状态，直接使用
+          return JSON.stringify(lexicalState);
+        }
+      } catch {
+        // 不是JSON格式，返回undefined让后续处理
+      }
+      return undefined; // 使用undefined，让updateEditorContent处理
     })() : undefined,
   };
 
-  // 更新编辑器内容（同步时使用）- 优化协作处理
+  // 更新编辑器内容（同步时使用）- 支持Lexical JSON格式
   const updateEditorContent = useCallback((newContent: string) => {
     if (!editorRef.current) return;
     
@@ -409,42 +535,98 @@ export function CollaborativeLexicalEditor({
       return;
     }
     
-    editorRef.current.update(() => {
-      const root = $getRoot();
-      const currentContent = root.getTextContent();
+    try {
+      // 尝试解析为JSON格式的Lexical状态
+      let isLexicalJSON = false;
+      let lexicalState = null;
       
-      // 避免不必要的更新
-      if (currentContent === newContent) {
-        return;
+      try {
+        lexicalState = JSON.parse(newContent);
+        // 检查是否是有效的Lexical状态格式
+        if (lexicalState && typeof lexicalState === 'object' && lexicalState.root) {
+          isLexicalJSON = true;
+        }
+      } catch {
+        // 不是JSON格式，作为纯文本处理
+        isLexicalJSON = false;
       }
       
-      console.log('Updating editor with collaborative content');
-      root.clear();
-      
-      if (newContent.trim()) {
-        // 简单地将内容作为段落插入
-        const lines = newContent.split('\n');
-        lines.forEach((line, index) => {
-          const paragraph = $createParagraphNode();
-          if (line.trim()) {
-            paragraph.append($createTextNode(line));
-          }
-          root.append(paragraph);
-        });
+      if (isLexicalJSON && lexicalState) {
+        console.log('Updating editor with Lexical JSON state');
+        // 使用Lexical的状态恢复功能
+        try {
+          const editorState = editorRef.current.parseEditorState(lexicalState);
+          editorRef.current.setEditorState(editorState);
+          // 更新本地内容状态
+          setContent(newContent);
+          // 更新预览内容
+          setTimeout(() => {
+            const readableText = getReadableContent();
+            setPreviewContent(readableText);
+          }, 50);
+          return; // 成功设置状态，直接返回
+        } catch (error) {
+          console.error('Failed to parse Lexical state, falling back to text:', error);
+          // 降级处理
+        }
       }
-    });
-    
-    // 更新本地内容状态
-    setContent(newContent);
-  }, []);
+      
+      editorRef.current.update(() => {
+        const root = $getRoot();
+        
+        // 降级处理：作为纯文本内容处理
+        const currentContent = root.getTextContent();
+        
+        // 避免不必要的更新
+        if (currentContent === newContent) {
+          return;
+        }
+        
+        console.log('Updating editor with plain text content');
+        root.clear();
+        
+        if (newContent.trim()) {
+          // 简单地将内容作为段落插入
+          const lines = newContent.split('\n');
+          lines.forEach((line, index) => {
+            const paragraph = $createParagraphNode();
+            if (line.trim()) {
+              paragraph.append($createTextNode(line));
+            }
+            root.append(paragraph);
+          });
+        }
+              });
+        
+        // 更新本地内容状态和预览内容（仅用于降级情况）
+        setContent(newContent);
+        setTimeout(() => {
+          const readableText = getReadableContent();
+          setPreviewContent(readableText);
+        }, 50);
+        
+      } catch (error) {
+        console.error('Failed to update editor content:', error);
+                  // 即使出错也要更新内容状态
+          setContent(newContent);
+        }
+      }, [getReadableContent]);
 
   // 當內容加載完成時，立即更新編輯器
   useEffect(() => {
     if (!isLoading && content && editorRef.current) {
       console.log('Content loaded, updating editor with initial content:', content.length);
       updateEditorContent(content);
+      
+      // 延迟更新预览内容（确保编辑器状态已更新）
+      setTimeout(() => {
+        const readableText = getReadableContent();
+        if (readableText) {
+          setPreviewContent(readableText);
+        }
+      }, 100);
     }
-  }, [isLoading, content, updateEditorContent]);
+  }, [isLoading, content, updateEditorContent, getReadableContent]);
 
   // 跟踪用户输入时间（用于协作冲突检测）和快捷鍵
   useEffect(() => {
@@ -487,18 +669,48 @@ export function CollaborativeLexicalEditor({
     };
   }, [isPreviewMode]); // 移除 handleManualSave 依賴以避免循環依賴
 
-  // 处理内容变化
+    // 处理内容变化 - 使用防抖机制减少频繁更新
+  const contentChangeTimeoutRef = useRef<NodeJS.Timeout>();
+  
   const handleContentChange = useCallback((editorState: EditorState) => {
+    // 清除之前的防抖定时器
+    if (contentChangeTimeoutRef.current) {
+      clearTimeout(contentChangeTimeoutRef.current);
+    }
+    
+    // 立即更新预览内容（纯文本，性能较好）
     editorState.read(() => {
       const root = $getRoot();
       const textContent = root.getTextContent();
-      
-      if (textContent !== content) {
-        setContent(textContent);
-        setHasUnsavedChanges(textContent !== (documentState?.content || initialContent));
-        onContentChange?.(textContent);
-      }
+      setPreviewContent(textContent);
+      onContentChange?.(textContent); // 回调使用可读文本
     });
+    
+    // 防抖处理JSON序列化（500ms后执行）
+    contentChangeTimeoutRef.current = setTimeout(() => {
+      try {
+        // 使用JSON序列化获取完整的编辑器状态
+        const editorStateJSON = editorState.toJSON();
+        const serializedContent = JSON.stringify(editorStateJSON, null, 0);
+        
+        if (serializedContent !== content) {
+          setContent(serializedContent);
+          setHasUnsavedChanges(serializedContent !== (documentState?.content || initialContent));
+        }
+      } catch (error) {
+        console.error('Failed to handle content change:', error);
+        // 降级为纯文本处理
+        editorState.read(() => {
+          const root = $getRoot();
+          const textContent = root.getTextContent();
+          
+          if (textContent !== content) {
+            setContent(textContent);
+            setHasUnsavedChanges(textContent !== (documentState?.content || initialContent));
+          }
+        });
+      }
+    }, 500); // 500ms防抖
   }, [content, documentState, initialContent, onContentChange]);
 
   // 手动保存功能（保留用于兼容性）
@@ -507,6 +719,7 @@ export function CollaborativeLexicalEditor({
     
     setIsSaving(true);
     try {
+      // 保存时使用JSON序列化的内容（包含完整格式）
       await onSave(content);
       setHasUnsavedChanges(false);
       toast.success('文档已保存');
@@ -576,7 +789,23 @@ export function CollaborativeLexicalEditor({
   // 保存编辑器引用
   const saveEditorRef = useCallback((editor: any) => {
     editorRef.current = editor;
-  }, []);
+    
+    // 编辑器准备好后，立即设置内容（如果有的话）
+    if (editor && content && !isLoading) {
+      console.log('Editor ready, setting initial content immediately');
+      setTimeout(() => {
+        updateEditorContent(content);
+        // 更新预览内容
+        setTimeout(() => {
+          const readableText = getReadableContent();
+          if (readableText) {
+            setPreviewContent(readableText);
+            console.log('Preview content updated after editor ready:', readableText.length);
+          }
+        }, 50);
+      }, 100);
+    }
+  }, [content, isLoading, updateEditorContent, getReadableContent]);
 
   // 切换版本历史
   const toggleVersionHistory = useCallback(() => {
@@ -792,7 +1021,7 @@ export function CollaborativeLexicalEditor({
               <div className="p-8 prose prose-lg max-w-none bg-white m-4 rounded-lg shadow-sm">
                 <div className="markdown-preview">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {content || '# 开始编写您的文档\n\n在左側編輯器中輸入 Markdown 內容，右側會實時顯示渲染效果...'}
+                    {previewContent || '# 开始编写您的文档\n\n在左側編輯器中輸入 Markdown 內容，右側會實時顯示渲染效果...'}
                   </ReactMarkdown>
                 </div>
               </div>
@@ -804,8 +1033,8 @@ export function CollaborativeLexicalEditor({
       {/* 底部状态栏 */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
         <div className="flex items-center space-x-4">
-          <span>字符数: {content.length}</span>
-          <span>行数: {content.split('\n').length}</span>
+          <span>字符数: {previewContent.length}</span>
+          <span>行数: {previewContent.split('\n').length}</span>
           {hasUnsavedChanges && (
             <span className="text-yellow-600 font-medium">● 有未保存的更改</span>
           )}
