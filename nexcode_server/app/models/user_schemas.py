@@ -1,7 +1,8 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 import re
+from enum import Enum
 
 # 用户相关模型
 class UserBase(BaseModel):
@@ -105,11 +106,48 @@ class CommitInfoWithUser(CommitInfoResponse):
     user: UserResponse
 
 # API Key相关模型
+class TokenScope(str, Enum):
+    """API Token权限范围枚举 - 参考GitHub模式"""
+    # 用户权限
+    USER_READ = "user:read"           # 读取用户信息
+    USER_WRITE = "user:write"         # 修改用户信息
+    
+    # 仓库权限  
+    REPO_READ = "repo:read"           # 读取仓库信息
+    REPO_WRITE = "repo:write"         # 修改仓库内容
+    
+    # API权限
+    API_READ = "api:read"             # 调用读取API
+    API_WRITE = "api:write"           # 调用写入API
+    
+    # 管理权限
+    ADMIN = "admin"                   # 管理员权限
+    
+    @classmethod
+    def get_default_scopes(cls) -> List[str]:
+        """获取默认权限范围"""
+        return [cls.USER_READ, cls.REPO_READ, cls.API_READ, cls.API_WRITE]
+    
+    @classmethod  
+    def get_all_scopes(cls) -> List[str]:
+        """获取所有权限范围"""
+        return [scope.value for scope in cls]
+
+
 class APIKeyCreate(BaseModel):
-    key_name: str = Field(..., min_length=1, max_length=100)
-    scopes: Optional[List[str]] = None
-    rate_limit: Optional[int] = Field(1000, ge=1, le=10000)
-    expires_at: Optional[datetime] = None
+    key_name: str = Field(..., min_length=1, max_length=100, description="API密钥名称")
+    scopes: Optional[List[str]] = Field(default_factory=TokenScope.get_default_scopes, description="权限范围")
+    rate_limit: Optional[int] = Field(1000, ge=1, le=10000, description="每小时速率限制")
+    expires_at: Optional[datetime] = Field(None, description="过期时间（可选）")
+    
+    @validator('scopes')
+    def validate_scopes(cls, v):
+        if v:
+            valid_scopes = TokenScope.get_all_scopes()
+            invalid = [scope for scope in v if scope not in valid_scopes]
+            if invalid:
+                raise ValueError(f"无效的权限范围: {invalid}")
+        return v
 
 class APIKeyResponse(BaseModel):
     id: int

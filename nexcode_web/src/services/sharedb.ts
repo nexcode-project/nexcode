@@ -314,7 +314,7 @@ export class ShareDBClient {
       if (this.currentContent !== serverDoc.content) {
         return await this.syncDocument(this.currentContent);
       }
-      
+      console.log('Force sync successful');
       return {
         success: true,
         version: serverDoc.version,

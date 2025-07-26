@@ -6,6 +6,7 @@ API客户端模块
 from typing import Dict, Any, Optional, List
 
 import requests
+import os
 
 from ..config import get_merged_config
 from .endpoints import ENDPOINTS
@@ -16,10 +17,23 @@ class NexCodeAPIClient:
 
     def __init__(self):
         self.config = get_merged_config()
-        self.base_url = self.config.get("api_server", {}).get(
-            "url", "http://localhost:8000"
+        
+        # 服务器配置 - 优先使用新的server配置
+        server_config = self.config.get("server", {})
+        api_server_config = self.config.get("api_server", {})  # 向后兼容
+        
+        self.base_url = server_config.get("url") or api_server_config.get("url", "http://localhost:8000")
+        self.server_enabled = server_config.get("enabled", True)
+        
+        # 认证Token - 支持多种配置方式（优先级从高到低）
+        auth_config = self.config.get("auth", {})
+        self.token = (
+            auth_config.get("token") or                    # 新的auth.token配置
+            auth_config.get("api_key") or                  # auth.api_key配置  
+            api_server_config.get("token") or              # 旧的api_server.token配置
+            os.getenv("NEXCODE_TOKEN") or                  # 环境变量
+            os.getenv("NEXCODE_API_TOKEN")                 # 备用环境变量
         )
-        self.token = self.config.get("api_server", {}).get("token")
 
         # API配置 - 将传递给服务端使用
         # 优先使用api配置，如果没有则尝试兼容旧的配置结构
@@ -37,6 +51,8 @@ class NexCodeAPIClient:
         self.headers = {
             "Content-Type": "application/json",
         }
+        
+        # 使用Bearer token认证（GitHub风格）
         if self.token:
             self.headers["Authorization"] = f"Bearer {self.token}"
 

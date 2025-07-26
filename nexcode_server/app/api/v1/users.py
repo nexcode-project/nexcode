@@ -7,7 +7,7 @@ from app.services.auth_service import auth_service
 from app.models.user_schemas import (
     UserResponse, UserUpdate, UserProfile, UserCASLogin, Token,
     APIKeyCreate, APIKeyResponse, APIKeyWithToken, UserSessionResponse,
-    UserCreate
+    UserCreate, TokenScope
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -149,6 +149,29 @@ async def revoke_user_api_key(
     await db.commit()
     
     return {"message": "API key revoked successfully"}
+
+@router.get("/me/api-keys/scopes")
+async def get_available_token_scopes():
+    """获取可用的API Token权限范围"""
+    return {
+        "scopes": [
+            {
+                "value": scope.value,
+                "label": scope.value,
+                "description": {
+                    "user:read": "读取用户基本信息",
+                    "user:write": "修改用户信息",
+                    "repo:read": "读取仓库信息",
+                    "repo:write": "修改仓库内容",
+                    "api:read": "调用只读API",
+                    "api:write": "调用写入API",
+                    "admin": "管理员权限"
+                }.get(scope.value, scope.value)
+            }
+            for scope in TokenScope
+        ],
+        "default_scopes": TokenScope.get_default_scopes()
+    }
 
 # 管理员用户管理
 @router.get("/", response_model=List[UserResponse])
