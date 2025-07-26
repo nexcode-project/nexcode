@@ -295,12 +295,15 @@ class AuthService:
             user = result.scalar_one_or_none()
             
             if user:
-                # 更新最后访问时间 - 修复 SQLAlchemy 语法
+                # 更新最后访问时间
                 from sqlalchemy import update
                 await db.execute(
                     update(UserSession)
                     .where(UserSession.session_token == session_token)
-                    .values(expires_at=datetime.utcnow() + timedelta(hours=24))
+                    .values(
+                        expires_at=datetime.utcnow() + timedelta(hours=24),
+                        last_activity=datetime.utcnow()
+                    )
                 )
                 await db.commit()
             

@@ -53,26 +53,36 @@ class ShareDBService:
         return self.doc_locks[doc_id]
     
     async def get_document(self, doc_id: str) -> Dict[str, Any]:
-        """获取文档当前状态"""
+        """获取文档当前状态，确保返回最新版本"""
         try:
-            doc = self.documents.find_one({"doc_id": doc_id})
+            # 使用排序确保获取最新状态
+            doc = self.documents.find_one(
+                {"doc_id": doc_id},
+                sort=[("updated_at", -1)]  # 按更新时间降序排列
+            )
+            
             if not doc:
-                # 创建新文档
+                # 检查是否应该从 PostgreSQL 同步内容
+                # 这里我们创建一个空文档，让调用方决定是否同步
                 doc = {
                     "doc_id": doc_id,
                     "content": "",
                     "version": 0,
                     "created_at": datetime.utcnow(),
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.utcnow(),
+                    "last_editor_id": None
                 }
-                self.documents.insert_one(doc)
+                result = self.documents.insert_one(doc)
+                doc["_id"] = result.inserted_id
+                logger.info(f"Created new empty document {doc_id} in ShareDB")
             
             return {
                 "doc_id": doc["doc_id"],
                 "content": doc["content"],
                 "version": doc["version"],
                 "created_at": doc["created_at"].isoformat(),
-                "updated_at": doc["updated_at"].isoformat()
+                "updated_at": doc["updated_at"].isoformat(),
+                "last_editor_id": doc.get("last_editor_id")
             }
         except Exception as e:
             logger.error(f"Failed to get document {doc_id}: {e}")
@@ -197,17 +207,18 @@ class ShareDBService:
                            user_id: int, create_version: bool = False, db_session: AsyncSession = None) -> dict:
         """同步文档到ShareDB，可选创建PostgreSQL版本快照"""
         lock = self._get_doc_lock(doc_id)
-        if create_version:
-            version = version + 1
         async with lock:
             try:
+                # ShareDB 版本号始终递增（用于协作同步检测）
+                new_sharedb_version = version + 1
+                
                 # 1. 更新 ShareDB (MongoDB) 中的文档内容
                 result = self.documents.update_one(
                     {"doc_id": doc_id},
                     {
                         "$set": {
                             "content": content,
-                            "version": version,
+                            "version": new_sharedb_version,  # ShareDB 版本总是递增
                             "updated_at": datetime.utcnow(),
                             "last_editor_id": user_id
                         }
@@ -218,7 +229,7 @@ class ShareDBService:
                 # 2. 记录操作历史
                 operation = {
                     "doc_id": doc_id,
-                    "version": version,
+                    "version": new_sharedb_version,
                     "content": content,
                     "user_id": user_id,
                     "timestamp": datetime.utcnow(),
@@ -229,13 +240,15 @@ class ShareDBService:
                 # 3. 可选：在PostgreSQL中创建版本快照（用于长期存储和恢复）
                 if create_version and db_session:
                     await self._create_version_snapshot(
-                        db_session, doc_id, content, user_id, version
+                        db_session, doc_id, content, user_id, new_sharedb_version
                     )
+                
+                logger.info(f"Document {doc_id} synced: ShareDB v{new_sharedb_version}, PostgreSQL snapshot: {create_version}")
                 
                 return {
                     "success": True,
                     "content": content,
-                    "version": version,
+                    "version": new_sharedb_version,  # 返回新的 ShareDB 版本号
                     "operations": []
                 }
             except Exception as e:

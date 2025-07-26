@@ -2,18 +2,12 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { useAuthStore } from '@/store/authStore';
-import { api } from '@/lib/api';
+import { apiService } from '@/services/api';
+import type { Document as ApiDocument } from '@/types/api';
 import { Plus, FileText, Users, Edit, Trash2, ExternalLink } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-interface Document {
-  id: number;
-  title: string;
-  content: string;
-  created_by: number;
-  created_at: string;
-  updated_at: string;
-}
+type Document = ApiDocument;
 
 export default function Documents() {
   const router = useRouter();
@@ -34,8 +28,8 @@ export default function Documents() {
 
   const fetchDocuments = async () => {
     try {
-      const response = await api.get('/v1/documents');
-      setDocuments(response.data.documents);
+      const response = await apiService.getDocuments();
+      setDocuments(response.documents);
     } catch (error) {
       console.error('Failed to fetch documents:', error);
       toast.error('获取文档列表失败');
@@ -46,11 +40,10 @@ export default function Documents() {
 
   const handleCreateDocument = async () => {
     try {
-      const response = await api.post('/v1/documents', {
+      const newDoc = await apiService.createDocument({
         title: '新文档',
         content: ''
       });
-      const newDoc = response.data;
       setDocuments(prev => [newDoc, ...prev]);
       router.push(`/documents/${newDoc.id}/collaborate`);
     } catch (error) {
@@ -63,7 +56,7 @@ export default function Documents() {
     if (!confirm('确定要删除这个文档吗？')) return;
 
     try {
-      await api.delete(`/v1/documents/${id}`);
+      await apiService.deleteDocument(id);
       setDocuments(prev => prev.filter(doc => doc.id !== id));
       toast.success('文档已删除');
     } catch (error) {
