@@ -13,12 +13,25 @@ LOCAL_CONFIG_FILE = "config.yaml"
 
 # Default configuration values
 DEFAULT_CONFIG = {
+    "auth": {
+        # Personal Access Token for API authentication (GitHub-style)
+        "token": "",
+        # Legacy API configuration (for backward compatibility)
+        "api_key": "",
+    },
     "api": {
-        # Your OpenAI API key.
+        # Your OpenAI API key (legacy, for backward compatibility)
         # If left blank, the tool will try to use the OPENAI_API_KEY environment variable.
         "key": "",
         "base_url": ""
     },
+    "server": {
+        # NexCode Server URL
+        "url": "http://localhost:8000",
+        # Whether to enable server mode (default: True)
+        "enabled": True
+    },
+    # Legacy api_server config (for backward compatibility)
     "api_server": {
         # NexCode LLM Proxy Server URL
         # The FastAPI server that handles LLM requests

@@ -58,6 +58,61 @@ async def get_current_user(
     return user
 
 
+def require_scope(required_scope: str):
+    """创建需要特定权限范围的依赖"""
+    async def check_scope(
+        request: Request,
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        credentials_exception = HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+        permission_exception = HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient permissions. Required scope: {required_scope}",
+        )
+
+        user = None
+
+        if credentials:
+            token = credentials.credentials
+
+            # 首先尝试JWT验证
+            token_data = auth_service.verify_token(token)
+            if token_data and token_data.user_id:
+                user = await auth_service.get_user_by_id(db, token_data.user_id)
+                # JWT token暂时默认有所有权限
+                return user
+
+            # 尝试API Key验证并检查权限
+            user = await auth_service.verify_api_key_permission(db, token, required_scope)
+            if user:
+                return user
+
+        # 检查Session Token（默认有完整权限）
+        session_token = None
+        if "session_token" in request.cookies:
+            session_token = request.cookies["session_token"]
+        elif "X-Session-Token" in request.headers:
+            session_token = request.headers["X-Session-Token"]
+
+        if session_token:
+            user = await auth_service.verify_session_token(db, session_token)
+            if user:
+                return user
+
+        if not user:
+            raise credentials_exception
+        else:
+            raise permission_exception
+
+    return check_scope
+
+
 async def get_current_user_ws(
     websocket: WebSocket,
     token: Optional[str] = Query(None),

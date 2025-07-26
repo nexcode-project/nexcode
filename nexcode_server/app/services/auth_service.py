@@ -313,17 +313,18 @@ class AuthService:
             return None
     
     def generate_api_key(self) -> tuple[str, str, str]:
-        """生成API密钥
+        """生成API密钥 - GitHub风格
         返回: (完整密钥, 密钥哈希, 密钥前缀)
         """
-        # 生成随机密钥
-        key = f"nxc_{secrets.token_urlsafe(32)}"
+        # 生成GitHub风格的token: nxc_随机字符串
+        random_part = secrets.token_urlsafe(32)
+        key = f"nxc_{random_part}"
         
         # 生成哈希
         key_hash = hashlib.sha256(key.encode()).hexdigest()
         
-        # 生成前缀用于显示
-        key_prefix = key[:10] + "..."
+        # 生成前缀用于显示 (nxc_前8位...)
+        key_prefix = f"{key[:12]}..."
         
         return key, key_hash, key_prefix
     
@@ -332,6 +333,12 @@ class AuthService:
                            rate_limit: int = 1000, 
                            expires_at: Optional[datetime] = None) -> tuple[APIKey, str]:
         """创建API密钥"""
+        from app.models.user_schemas import TokenScope
+        
+        # 如果未指定权限，使用默认权限
+        if not scopes:
+            scopes = TokenScope.get_default_scopes()
+            
         key, key_hash, key_prefix = self.generate_api_key()
         
         api_key = APIKey(
@@ -352,6 +359,9 @@ class AuthService:
     
     async def verify_api_key(self, db: AsyncSession, api_key: str) -> Optional[User]:
         """验证API密钥"""
+        if not api_key.startswith("nxc_"):
+            return None
+            
         key_hash = hashlib.sha256(api_key.encode()).hexdigest()
         
         stmt = select(APIKey).where(
@@ -365,6 +375,41 @@ class AuthService:
             # 检查是否过期
             if api_key_obj.expires_at and api_key_obj.expires_at < datetime.utcnow():
                 return None
+            
+            # 更新使用统计
+            api_key_obj.usage_count += 1
+            api_key_obj.last_used = datetime.utcnow()
+            await db.commit()
+            
+            # 获取用户
+            return await self.get_user_by_id(db, api_key_obj.user_id)
+        return None
+
+    async def verify_api_key_permission(self, db: AsyncSession, api_key: str, required_scope: str) -> Optional[User]:
+        """验证API密钥权限"""
+        if not api_key.startswith("nxc_"):
+            return None
+            
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        
+        stmt = select(APIKey).where(
+            APIKey.key_hash == key_hash,
+            APIKey.is_active == True
+        )
+        result = await db.execute(stmt)
+        api_key_obj = result.scalar_one_or_none()
+        
+        if api_key_obj:
+            # 检查是否过期
+            if api_key_obj.expires_at and api_key_obj.expires_at < datetime.utcnow():
+                return None
+                
+            # 检查权限范围
+            if api_key_obj.scopes and required_scope not in api_key_obj.scopes:
+                # 检查是否有admin权限
+                from app.models.user_schemas import TokenScope
+                if TokenScope.ADMIN not in api_key_obj.scopes:
+                    return None
             
             # 更新使用统计
             api_key_obj.usage_count += 1

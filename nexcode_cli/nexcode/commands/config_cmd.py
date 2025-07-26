@@ -11,8 +11,36 @@ def interactive_config():
     # 获取当前配置
     current_config = dict(app_config)
     
-    # API 配置
-    click.echo("\n📡 API 配置")
+    # 认证配置
+    click.echo("\n🔐 认证配置")
+    click.echo("-" * 20)
+    
+    # Personal Access Token (新的认证方式)
+    current_token = current_config.get('auth', {}).get('token', '')
+    if current_token:
+        click.echo(f"当前 Personal Access Token: {'*' * (len(current_token) - 8)}{current_token[-8:] if len(current_token) > 8 else current_token}")
+    else:
+        click.echo("当前 Personal Access Token: 未设置")
+    
+    new_token = click.prompt('请输入 Personal Access Token (留空保持不变)', default='', show_default=False)
+    if new_token.strip():
+        if 'auth' not in current_config:
+            current_config['auth'] = {}
+        current_config['auth']['token'] = new_token.strip()
+    
+    # 服务器配置
+    click.echo("\n🌐 服务器配置")
+    click.echo("-" * 20)
+    
+    current_server_url = current_config.get('server', {}).get('url', '') or current_config.get('api_server', {}).get('url', '')
+    new_server_url = click.prompt('请输入服务器URL', default=current_server_url or 'http://localhost:8000')
+    if 'server' not in current_config:
+        current_config['server'] = {}
+    current_config['server']['url'] = new_server_url
+    current_config['server']['enabled'] = True
+    
+    # API 配置（向后兼容）
+    click.echo("\n📡 API 配置（可选，用于直连模式）")
     click.echo("-" * 20)
     
     # API Key
@@ -22,7 +50,7 @@ def interactive_config():
     else:
         click.echo("当前 API Key: 未设置")
     
-    new_key = click.prompt('请输入 API Key (留空保持不变)', default='', show_default=False)
+    new_key = click.prompt('请输入 API Key (用于直连OpenAI，留空保持不变)', default='', show_default=False)
     if new_key.strip():
         if 'api' not in current_config:
             current_config['api'] = {}
@@ -30,23 +58,24 @@ def interactive_config():
     
     # Base URL
     current_base_url = current_config.get('api', {}).get('base_url', '')
-    new_base_url = click.prompt('请输入 API Base URL', default=current_base_url or 'http://10.12.160.15/v1')
-    if 'api' not in current_config:
-        current_config['api'] = {}
-    current_config['api']['base_url'] = new_base_url
+    new_base_url = click.prompt('请输入 API Base URL (用于直连，留空使用默认)', default=current_base_url or '')
+    if new_base_url.strip():
+        if 'api' not in current_config:
+            current_config['api'] = {}
+        current_config['api']['base_url'] = new_base_url.strip()
     
     # 模型配置
     click.echo("\n🤖 模型配置")
     click.echo("-" * 20)
     
     current_model = current_config.get('model', {}).get('name', '')
-    new_model = click.prompt('请输入模型名称', default=current_model or 'codedrive-chat')
+    new_model = click.prompt('请输入模型名称', default=current_model or 'gpt-4o-mini')
     if 'model' not in current_config:
         current_config['model'] = {}
     current_config['model']['name'] = new_model
     
     # Commit 温度
-    current_commit_temp = current_config.get('model', {}).get('commit_temperature', 0.7)
+    current_commit_temp = current_config.get('model', {}).get('commit_temperature', 0.1)
     new_commit_temp = click.prompt('提交消息生成温度 (0.0-1.0)', default=current_commit_temp, type=float)
     current_config['model']['commit_temperature'] = max(0.0, min(1.0, new_commit_temp))
     
