@@ -417,7 +417,8 @@ def push(branch, message, auto_commit, dry_run, debug):
         # 处理分支创建和切换
         target_branch_name = suggested_branch or extracted_branch
         if target_branch_name and target_branch_name != current_branch:
-            if click.confirm(f"是否创建并切换到建议的分支 '{target_branch_name}'?"):
+            check_branch_confirm = click.confirm(f"是否创建并切换到建议的分支 '{target_branch_name}'?")
+            if check_branch_confirm:
                 try:
                     # 创建并切换到新分支
                     subprocess.run(['git', 'checkout', '-b', target_branch_name], check=True)
@@ -484,12 +485,16 @@ def push(branch, message, auto_commit, dry_run, debug):
             except subprocess.CalledProcessError as e:
                 click.echo(f"❌ 提交失败: {e}")
                 return
-        
+        cmd_parts = push_command.split()
+        if not check_branch_confirm:
+            cmd_parts[-1] = current_branch        
         # 确认推送
-        if click.confirm(f"执行推送吗?\n命令: {push_command}"):
+        if click.confirm(f"执行推送吗?\n命令: {cmd_parts}"):
             try:
                 # 解析推送命令并执行
                 cmd_parts = push_command.split()
+                if not check_branch_confirm:
+                    cmd_parts[-1] = current_branch
                 subprocess.run(cmd_parts, check=True)
                 click.echo("✅ 代码推送成功!")
             except subprocess.CalledProcessError as e:
