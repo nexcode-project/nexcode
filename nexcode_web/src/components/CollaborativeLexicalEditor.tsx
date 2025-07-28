@@ -376,6 +376,7 @@ interface CollaborativeLexicalEditorProps {
   initialDocumentState?: DocumentState; // 新增：传入初始文档状态
   onContentChange?: (content: string) => void;
   onSave?: (content: string) => Promise<void>;
+  onLexicalContentChange?: (lexicalContent: string) => void; // 新增：Lexical格式内容变化回调
 }
 
 export function CollaborativeLexicalEditor({
@@ -383,12 +384,13 @@ export function CollaborativeLexicalEditor({
   initialContent = '',
   initialDocumentState, // 新增参数
   onContentChange,
-  onSave
+  onSave,
+  onLexicalContentChange
 }: CollaborativeLexicalEditorProps) {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [content, setContent] = useState(initialContent);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
   const [isOnline, setIsOnline] = useState(true);
   const [documentState, setDocumentState] = useState<DocumentState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -443,6 +445,12 @@ export function CollaborativeLexicalEditor({
         
         setDocumentState(docState);
         setContent(finalContent);
+        
+        // 通知父组件初始Lexical内容，以便正确设置save按钮状态
+        // Always call this to ensure save button state is properly initialized
+        if (onLexicalContentChange) {
+          onLexicalContentChange(finalContent || '');
+        }
         
         // 设置初始预览内容
         try {
@@ -637,19 +645,8 @@ export function CollaborativeLexicalEditor({
     const handleKeyDown = (event: KeyboardEvent) => {
       // 記錄用戶輸入時間
       handleUserInput();
-      
-      // 快捷鍵：Ctrl+P (或 Cmd+P) 切換預覽模式
-      if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
-        event.preventDefault();
-        setIsPreviewMode(prev => !prev);
-        toast.success(`${isPreviewMode ? '已關閉' : '已開啟'}分屏預覽`);
-      }
-      
-      // 快捷鍵：Ctrl+S (或 Cmd+S) 手動保存
-      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-        event.preventDefault();
-        handleManualSave();
-      }
+    
+
     };
     
     // 监听各种用户输入事件
@@ -696,6 +693,8 @@ export function CollaborativeLexicalEditor({
         if (serializedContent !== content) {
           setContent(serializedContent);
           setHasUnsavedChanges(serializedContent !== (documentState?.content || initialContent));
+          // 调用Lexical内容变化回调
+          onLexicalContentChange?.(serializedContent);
         }
       } catch (error) {
         console.error('Failed to handle content change:', error);
@@ -707,29 +706,15 @@ export function CollaborativeLexicalEditor({
           if (textContent !== content) {
             setContent(textContent);
             setHasUnsavedChanges(textContent !== (documentState?.content || initialContent));
+            // 降级情况下也调用Lexical内容变化回调（虽然实际是纯文本）
+            onLexicalContentChange?.(textContent);
           }
         });
       }
     }, 500); // 500ms防抖
   }, [content, documentState, initialContent, onContentChange]);
 
-  // 手动保存功能（保留用于兼容性）
-  const handleManualSave = useCallback(async () => {
-    if (!onSave || !hasUnsavedChanges || isSaving) return;
-    
-    setIsSaving(true);
-    try {
-      // 保存时使用JSON序列化的内容（包含完整格式）
-      await onSave(content);
-      setHasUnsavedChanges(false);
-      toast.success('文档已保存');
-    } catch (error) {
-      console.error('Failed to save:', error);
-      toast.error('保存失败');
-    } finally {
-      setIsSaving(false);
-    }
-  }, [content, hasUnsavedChanges, isSaving, onSave]);
+
 
   // 手动同步（强制从服务器获取最新内容）
   const handleSync = useCallback(async () => {
@@ -835,7 +820,7 @@ export function CollaborativeLexicalEditor({
           <div className="flex items-center space-x-2">
             <div className={`w-3 h-3 rounded-full ${hasUnsavedChanges ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
             <span className="text-sm text-gray-600 font-medium">
-              {isSaving ? '保存中...' : hasUnsavedChanges ? '未保存' : '已保存'}
+              {hasUnsavedChanges ? '未保存' : '已保存'}
             </span>
           </div>
           
@@ -885,30 +870,8 @@ export function CollaborativeLexicalEditor({
             <span>历史</span>
           </button>
           
-          <button
-            onClick={() => setIsPreviewMode(prev => !prev)}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            title="切换分屏预览模式 (Ctrl+P)"
-          >
-            {isPreviewMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            <span>{isPreviewMode ? '纯编辑' : '分屏预览'}</span>
-          </button>
           
 
-          
-          <button
-            onClick={handleManualSave}
-            disabled={!hasUnsavedChanges || isSaving}
-            className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
-              hasUnsavedChanges 
-                ? 'text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400' 
-                : 'text-gray-500 bg-gray-100 cursor-not-allowed'
-            }`}
-            title="手动保存文档 (Ctrl+S)"
-          >
-            <Save className="h-4 w-4" />
-            <span>{isSaving ? '保存中...' : '保存'}</span>
-          </button>
         </div>
       </div>
 
@@ -1060,12 +1023,7 @@ export function CollaborativeLexicalEditor({
           <span>ShareDB 协作</span>
           <span>•</span>
           <span>{isOnline ? '在线' : '离线'}</span>
-          {isPreviewMode && (
-            <>
-              <span>•</span>
-              <span className="text-green-600">分屏预览模式</span>
-            </>
-          )}
+          
           {hasCollaborativeUpdates && (
             <>
               <span>•</span>

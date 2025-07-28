@@ -176,7 +176,7 @@ async def update_document(
         category=document_data.category,
         tags=document_data.tags,
         change_description=document_data.change_description,
-        create_version=True,  # 常规文档更新创建版本
+        create_version=document_data.create_version,  # 使用请求中的参数
     )
     
     # 转换为响应格式 - 简化处理，避免异步关系访问
