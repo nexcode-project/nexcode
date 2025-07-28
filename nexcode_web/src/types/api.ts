@@ -215,4 +215,28 @@ export interface ErrorResponse {
   error: string;
   detail?: string;
   status_code?: number;
+}
+
+// ===================== Personal Access Token 相關 =====================
+export interface APIKey {
+  id: number;
+  key_name: string;
+  key_prefix: string;
+  scopes: string[];
+  rate_limit: number;
+  usage_count: number;
+  last_used: string | null;
+  is_active: boolean;
+  created_at: string;
+  expires_at: string | null;
+}
+
+export interface TokenScope {
+  name: string;
+  description: string;
+}
+
+export interface ScopesResponse {
+  scopes: TokenScope[];
+  default_scopes: string[];
 } 
