@@ -23,6 +23,7 @@ export default function DocumentCollaborate() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
+  const [currentLexicalContent, setCurrentLexicalContent] = useState<string>('');
 
   // 获取文档信息 - 只获取一次，然后传递给编辑器
   useEffect(() => {
@@ -34,6 +35,9 @@ export default function DocumentCollaborate() {
         const doc = response.data;
         setDocument(doc);
         setTitleValue(doc.title);
+        // Initialize currentLexicalContent with existing document content
+        // This ensures the save button is enabled for existing documents
+        setCurrentLexicalContent(doc.content || '');
         
         // 将文档信息转换为DocumentState格式
         setDocumentState({
@@ -67,21 +71,39 @@ export default function DocumentCollaborate() {
     setTitleValue(document?.title || '');
   };
 
-  // 保存标题
+  // 保存标题（创建新版本）
   const handleSaveTitle = async () => {
     if (!document || !titleValue.trim()) return;
 
     setSavingTitle(true);
     try {
+      // 先更新标题
       await api.put(`/v1/documents/${document.id}`, {
         title: titleValue.trim(),
-        content: document.content
+        content: currentLexicalContent || document.content,
       });
       
-      // 更新本地状态
-      setDocument(prev => prev ? { ...prev, title: titleValue.trim() } : null);
-      setIsEditingTitle(false);
-      toast.success('标题已保存');
+      // 然后使用ShareDB服务同步并创建版本
+      const response = await api.post('/v1/sharedb/documents/sync', {
+        doc_id: document.id.toString(),
+        version: documentState?.version || 0,
+        content: currentLexicalContent || document.content,
+        create_version: true  // 强制创建新版本
+      });
+      
+      if (response.data.success) {
+        // 更新本地状态
+        setDocument(prev => prev ? { ...prev, title: titleValue.trim() } : null);
+        setDocumentState(prev => prev ? {
+          ...prev,
+          content: response.data.content,
+          version: response.data.version
+        } : null);
+        setIsEditingTitle(false);
+        toast.success('标题已保存为新版本');
+      } else {
+        toast.error('保存失败: ' + (response.data.error || '未知错误'));
+      }
     } catch (error) {
       console.error('Failed to save title:', error);
       toast.error('保存标题失败');
@@ -101,17 +123,39 @@ export default function DocumentCollaborate() {
     }
   };
 
-  // 保存文档
-  const handleSave = async (content: string) => {
+  // 保存文档（创建新版本）
+  const handleSave = async (content?: string) => {
     if (!document) return;
+
+    // 使用传入的content参数，如果没有则使用当前Lexical内容，最后回退到文档原始内容
+    const contentToSave = content || currentLexicalContent || document.content;
+    
+    if (!contentToSave) {
+      toast.error('没有内容可保存');
+      return;
+    }
 
     setSaving(true);
     try {
-      await api.put(`/v1/documents/${document.id}`, {
-        title: document.title,
-        content
+      // 使用ShareDB服务同步并创建版本
+      const response = await api.post('/v1/sharedb/documents/sync', {
+        doc_id: document.id.toString(),
+        version: documentState?.version || 0,
+        content: contentToSave,
+        create_version: true  // 强制创建新版本
       });
-      toast.success('文档已保存');
+      
+      if (response.data.success) {
+        // 更新本地状态
+        setDocumentState(prev => prev ? {
+          ...prev,
+          content: response.data.content,
+          version: response.data.version
+        } : null);
+        toast.success('文档已保存为新版本');
+      } else {
+        toast.error('保存失败: ' + (response.data.error || '未知错误'));
+      }
     } catch (error) {
       console.error('Failed to save document:', error);
       toast.error('保存文档失败');
@@ -203,7 +247,7 @@ export default function DocumentCollaborate() {
                       className="flex items-center space-x-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded text-sm transition-colors"
                     >
                       <Save className="h-3 w-3" />
-                      <span>{savingTitle ? '保存中...' : '保存'}</span>
+                      <span>{savingTitle ? '保存中...' : '保存版本'}</span>
                     </button>
                     <button
                       onClick={handleCancelEditTitle}
@@ -240,12 +284,12 @@ export default function DocumentCollaborate() {
                 </button>
                 
                 <button
-                  onClick={() => handleSave(document.content)}
-                  disabled={saving}
+                  onClick={() => handleSave()}
+                  disabled={saving || (!currentLexicalContent && !document?.content)}
                   className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg"
                 >
                   <Save className="h-4 w-4" />
-                  <span>{saving ? '保存中...' : '保存'}</span>
+                  <span>{saving ? '保存中...' : '保存为新版本'}</span>
                 </button>
               </div>
             </div>
@@ -259,9 +303,14 @@ export default function DocumentCollaborate() {
             initialContent={documentState.content}
             initialDocumentState={documentState}
             onContentChange={(content: string) => {
+              // 这里content是纯文本，用于预览
               setDocument(prev => prev ? { ...prev, content } : null);
             }}
             onSave={handleSave}
+            onLexicalContentChange={(lexicalContent: string) => {
+              // 这里lexicalContent是Lexical JSON格式
+              setCurrentLexicalContent(lexicalContent);
+            }}
           />
         )}
       </div>

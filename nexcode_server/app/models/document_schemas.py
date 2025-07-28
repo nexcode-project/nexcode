@@ -37,6 +37,7 @@ class DocumentUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=100)
     tags: Optional[List[str]] = None
     change_description: Optional[str] = Field(None, max_length=500)
+    create_version: Optional[bool] = Field(True, description="是否创建新版本")
 
 
 class UserInfo(BaseModel):
