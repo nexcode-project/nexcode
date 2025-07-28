@@ -446,6 +446,11 @@ export function CollaborativeLexicalEditor({
         setDocumentState(docState);
         setContent(finalContent);
         
+        // 通知父组件初始Lexical内容，以便正确设置save按钮状态
+        if (finalContent && onLexicalContentChange) {
+          onLexicalContentChange(finalContent);
+        }
+        
         // 设置初始预览内容
         try {
           const lexicalState = JSON.parse(finalContent);
@@ -713,7 +718,7 @@ export function CollaborativeLexicalEditor({
         });
       }
     }, 500); // 500ms防抖
-  }, [content, documentState, initialContent, onContentChange]);
+  }, [content, documentState, initialContent, onContentChange, onLexicalContentChange]);
 
 
 
