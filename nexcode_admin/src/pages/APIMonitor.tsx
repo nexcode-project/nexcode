@@ -67,10 +67,9 @@ const APIMonitor: React.FC = () => {
     try {
       // 并行获取API统计和实时数据
       const [stats, realtime] = await Promise.all([
-        monitoringAPI.getAPIStats('24h'),
+        monitoringAPI.getApiMonitoring('24h'),
         monitoringAPI.getRealtimeMetrics()
       ]);
-
       // 设置总体指标
       setMetrics({
         total_requests: stats.total_calls,
