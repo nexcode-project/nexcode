@@ -639,14 +639,7 @@ export function CollaborativeLexicalEditor({
     const handleKeyDown = (event: KeyboardEvent) => {
       // 記錄用戶輸入時間
       handleUserInput();
-      
-      // 快捷鍵：Ctrl+P (或 Cmd+P) 切換預覽模式
-      if ((event.ctrlKey || event.metaKey) && event.key === 'p') {
-        event.preventDefault();
-        setIsPreviewMode(prev => !prev);
-        toast.success(`${isPreviewMode ? '已關閉' : '已開啟'}分屏預覽`);
-      }
-      
+    
 
     };
     
@@ -871,16 +864,6 @@ export function CollaborativeLexicalEditor({
             <span>历史</span>
           </button>
           
-          <button
-            onClick={() => setIsPreviewMode(prev => !prev)}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            title="切换分屏预览模式 (Ctrl+P)"
-          >
-            {isPreviewMode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            <span>{isPreviewMode ? '纯编辑' : '分屏预览'}</span>
-          </button>
-          
-
           
 
         </div>
@@ -1034,12 +1017,7 @@ export function CollaborativeLexicalEditor({
           <span>ShareDB 协作</span>
           <span>•</span>
           <span>{isOnline ? '在线' : '离线'}</span>
-          {isPreviewMode && (
-            <>
-              <span>•</span>
-              <span className="text-green-600">分屏预览模式</span>
-            </>
-          )}
+          
           {hasCollaborativeUpdates && (
             <>
               <span>•</span>
