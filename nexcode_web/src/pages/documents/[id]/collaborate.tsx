@@ -19,9 +19,6 @@ export default function DocumentCollaborate() {
   const [document, setDocument] = useState<Document | null>(null);
   const [documentState, setDocumentState] = useState<DocumentState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleValue, setTitleValue] = useState('');
   const [savingTitle, setSavingTitle] = useState(false);
   const [currentLexicalContent, setCurrentLexicalContent] = useState<string>('');
 
@@ -59,67 +56,47 @@ export default function DocumentCollaborate() {
     fetchDocument();
   }, [id, isAuthenticated, router]);
 
-  // 开始编辑标题
-  const handleStartEditTitle = () => {
-    setIsEditingTitle(true);
-    setTitleValue(document?.title || '');
-  };
+  const handleSaveTitle = async (newTitle: string) => {
+    if (!document || !newTitle.trim()) return;
 
-  // 取消编辑标题
-  const handleCancelEditTitle = () => {
-    setIsEditingTitle(false);
-    setTitleValue(document?.title || '');
-  };
 
-  // 保存标题（创建新版本）
-  const handleSaveTitle = async () => {
-    if (!document || !titleValue.trim()) return;
-
-    setSavingTitle(true);
     try {
       // 先更新标题
       await api.put(`/v1/documents/${document.id}`, {
-        title: titleValue.trim(),
-        content: currentLexicalContent || document.content,
+        title: newTitle.trim(),
+        content: document.content
       });
       
-      // 然后使用ShareDB服务同步并创建版本
-      const response = await api.post('/v1/sharedb/documents/sync', {
-        doc_id: document.id.toString(),
-        version: documentState?.version || 0,
-        content: currentLexicalContent || document.content,
-        create_version: true  // 强制创建新版本
-      });
-      
-      if (response.data.success) {
-        // 更新本地状态
-        setDocument(prev => prev ? { ...prev, title: titleValue.trim() } : null);
-        setDocumentState(prev => prev ? {
-          ...prev,
-          content: response.data.content,
-          version: response.data.version
-        } : null);
-        setIsEditingTitle(false);
-        toast.success('标题已保存为新版本');
-      } else {
-        toast.error('保存失败: ' + (response.data.error || '未知错误'));
-      }
+      // 更新本地状态
+      setDocument(prev => prev ? { ...prev, title: newTitle.trim() } : null);
+      toast.success('标题已保存');
+
     } catch (error) {
       console.error('Failed to save title:', error);
       toast.error('保存标题失败');
-    } finally {
-      setSavingTitle(false);
     }
   };
 
-  // 处理标题输入框的键盘事件
-  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+  // 处理标题编辑事件
+  const handleTitleChange = (e: React.FormEvent<HTMLHeadingElement>) => {
+    const newTitle = e.currentTarget.textContent || '';
+    setTitleValue(newTitle);
+  };
+
+  const handleTitleBlur = () => {
+    if (titleValue.trim() && titleValue !== document?.title) {
+      handleSaveTitle(titleValue);
+    }
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLHeadingElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSaveTitle();
+      e.currentTarget.blur(); // 触发blur事件，自动保存
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      handleCancelEditTitle();
+      e.currentTarget.textContent = document?.title || '';
+      e.currentTarget.blur();
     }
   };
 
@@ -230,48 +207,19 @@ export default function DocumentCollaborate() {
                 </button>
                 
                 {/* 标题编辑区域 */}
-                {isEditingTitle ? (
-                  <div className="flex items-center space-x-3">
-                    <input
-                      type="text"
-                      value={titleValue}
-                      onChange={(e) => setTitleValue(e.target.value)}
-                      onKeyDown={handleTitleKeyDown}
-                      className="text-xl font-semibold text-gray-900 border-2 border-blue-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="输入文档标题..."
-                      autoFocus
-                    />
-                    <button
-                      onClick={handleSaveTitle}
-                      disabled={savingTitle || !titleValue.trim()}
-                      className="flex items-center space-x-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded text-sm transition-colors"
-                    >
-                      <Save className="h-3 w-3" />
-                      <span>{savingTitle ? '保存中...' : '保存版本'}</span>
-                    </button>
-                    <button
-                      onClick={handleCancelEditTitle}
-                      disabled={savingTitle}
-                      className="flex items-center space-x-1 px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm transition-colors"
-                    >
-                      <X className="h-3 w-3" />
-                      <span>取消</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-3">
-                    <h1 className="text-xl font-semibold text-gray-900">
-                      {document.title}
-                    </h1>
-                    <button
-                      onClick={handleStartEditTitle}
-                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="编辑标题"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center space-x-3">
+                  <h1 
+                    contentEditable
+                    suppressContentEditableWarning
+                    onInput={handleTitleChange}
+                    onBlur={handleTitleBlur}
+                    onKeyDown={handleTitleKeyDown}
+                    className="text-xl font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none"
+                    title="点击编辑标题（建议简明扼要，回车保存）"
+                  >
+                    {document.title || "请输入标题"}
+                  </h1>
+                </div>
               </div>
               
               <div className="flex items-center space-x-2">
