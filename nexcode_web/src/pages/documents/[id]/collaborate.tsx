@@ -193,7 +193,7 @@ export default function DocumentCollaborate() {
                       value={titleValue}
                       onChange={(e) => setTitleValue(e.target.value)}
                       onKeyDown={handleTitleKeyDown}
-                      className="text-xl font-semibold text-gray-900 border-2 border-blue-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="text-xl font-semibold text-gray-900 border-2 border-blue-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                       placeholder="输入文档标题..."
                       autoFocus
                     />
@@ -216,16 +216,13 @@ export default function DocumentCollaborate() {
                   </div>
                 ) : (
                   <div className="flex items-center space-x-3">
-                    <h1 className="text-xl font-semibold text-gray-900">
+                    <h1 
+                      className="text-xl font-semibold text-gray-900 cursor-pointer hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                      onClick={handleStartEditTitle}
+                      title="点击编辑标题"
+                    >
                       {document.title}
                     </h1>
-                    <button
-                      onClick={handleStartEditTitle}
-                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                      title="编辑标题"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
                   </div>
                 )}
               </div>
