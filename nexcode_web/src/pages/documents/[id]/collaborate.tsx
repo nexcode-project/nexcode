@@ -19,7 +19,8 @@ export default function DocumentCollaborate() {
   const [document, setDocument] = useState<Document | null>(null);
   const [documentState, setDocumentState] = useState<DocumentState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savingTitle, setSavingTitle] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [titleValue, setTitleValue] = useState('');
   const [currentLexicalContent, setCurrentLexicalContent] = useState<string>('');
 
   // 获取文档信息 - 只获取一次，然后传递给编辑器
