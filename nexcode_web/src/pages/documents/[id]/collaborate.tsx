@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 import { toast } from 'react-hot-toast';
-import { ArrowLeft, Share, Users, Save } from 'lucide-react';
+import { ArrowLeft, Share, Users, Save, Edit2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import Layout from '@/components/Layout';
@@ -20,6 +20,9 @@ export default function DocumentCollaborate() {
   const [documentState, setDocumentState] = useState<DocumentState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState('');
+  const [savingTitle, setSavingTitle] = useState(false);
 
   // 获取文档信息 - 只获取一次，然后传递给编辑器
   useEffect(() => {
@@ -30,6 +33,7 @@ export default function DocumentCollaborate() {
         const response = await api.get(`/v1/documents/${id}`);
         const doc = response.data;
         setDocument(doc);
+        setTitleValue(doc.title);
         
         // 将文档信息转换为DocumentState格式
         setDocumentState({
@@ -50,6 +54,52 @@ export default function DocumentCollaborate() {
 
     fetchDocument();
   }, [id, isAuthenticated, router]);
+
+  // 开始编辑标题
+  const handleStartEditTitle = () => {
+    setIsEditingTitle(true);
+    setTitleValue(document?.title || '');
+  };
+
+  // 取消编辑标题
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setTitleValue(document?.title || '');
+  };
+
+  // 保存标题
+  const handleSaveTitle = async () => {
+    if (!document || !titleValue.trim()) return;
+
+    setSavingTitle(true);
+    try {
+      await api.put(`/v1/documents/${document.id}`, {
+        title: titleValue.trim(),
+        content: document.content
+      });
+      
+      // 更新本地状态
+      setDocument(prev => prev ? { ...prev, title: titleValue.trim() } : null);
+      setIsEditingTitle(false);
+      toast.success('标题已保存');
+    } catch (error) {
+      console.error('Failed to save title:', error);
+      toast.error('保存标题失败');
+    } finally {
+      setSavingTitle(false);
+    }
+  };
+
+  // 处理标题输入框的键盘事件
+  const handleTitleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveTitle();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEditTitle();
+    }
+  };
 
   // 保存文档
   const handleSave = async (content: string) => {
@@ -134,9 +184,50 @@ export default function DocumentCollaborate() {
                 >
                   <ArrowLeft className="h-5 w-5" />
                 </button>
-                <h1 className="text-xl font-semibold text-gray-900">
-                  {document.title}
-                </h1>
+                
+                {/* 标题编辑区域 */}
+                {isEditingTitle ? (
+                  <div className="flex items-center space-x-3">
+                    <input
+                      type="text"
+                      value={titleValue}
+                      onChange={(e) => setTitleValue(e.target.value)}
+                      onKeyDown={handleTitleKeyDown}
+                      className="text-xl font-semibold text-gray-900 border-2 border-blue-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="输入文档标题..."
+                      autoFocus
+                    />
+                    <button
+                      onClick={handleSaveTitle}
+                      disabled={savingTitle || !titleValue.trim()}
+                      className="flex items-center space-x-1 px-2 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded text-sm transition-colors"
+                    >
+                      <Save className="h-3 w-3" />
+                      <span>{savingTitle ? '保存中...' : '保存'}</span>
+                    </button>
+                    <button
+                      onClick={handleCancelEditTitle}
+                      disabled={savingTitle}
+                      className="flex items-center space-x-1 px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                      <span>取消</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-3">
+                    <h1 className="text-xl font-semibold text-gray-900">
+                      {document.title}
+                    </h1>
+                    <button
+                      onClick={handleStartEditTitle}
+                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="编辑标题"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
               </div>
               
               <div className="flex items-center space-x-2">
