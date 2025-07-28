@@ -35,6 +35,8 @@ export default function DocumentCollaborate() {
         const doc = response.data;
         setDocument(doc);
         setTitleValue(doc.title);
+        // Initialize currentLexicalContent with existing document content
+        // This ensures the save button is enabled for existing documents
         setCurrentLexicalContent(doc.content || '');
         
         // 将文档信息转换为DocumentState格式
@@ -125,8 +127,8 @@ export default function DocumentCollaborate() {
   const handleSave = async (content?: string) => {
     if (!document) return;
 
-    // 使用传入的content参数，如果没有则使用当前Lexical内容
-    const contentToSave = content || currentLexicalContent;
+    // 使用传入的content参数，如果没有则使用当前Lexical内容，最后回退到文档原始内容
+    const contentToSave = content || currentLexicalContent || document.content;
     
     if (!contentToSave) {
       toast.error('没有内容可保存');
@@ -283,7 +285,7 @@ export default function DocumentCollaborate() {
                 
                 <button
                   onClick={() => handleSave()}
-                  disabled={saving || !currentLexicalContent}
+                  disabled={saving || (!currentLexicalContent && !document?.content)}
                   className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg"
                 >
                   <Save className="h-4 w-4" />

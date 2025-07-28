@@ -447,8 +447,9 @@ export function CollaborativeLexicalEditor({
         setContent(finalContent);
         
         // 通知父组件初始Lexical内容，以便正确设置save按钮状态
-        if (finalContent && onLexicalContentChange) {
-          onLexicalContentChange(finalContent);
+        // Always call this to ensure save button state is properly initialized
+        if (onLexicalContentChange) {
+          onLexicalContentChange(finalContent || '');
         }
         
         // 设置初始预览内容
@@ -718,7 +719,7 @@ export function CollaborativeLexicalEditor({
         });
       }
     }, 500); // 500ms防抖
-  }, [content, documentState, initialContent, onContentChange, onLexicalContentChange]);
+  }, [content, documentState, initialContent, onContentChange]);
 
 
 
