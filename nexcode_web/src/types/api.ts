@@ -64,6 +64,8 @@ export interface DocumentUpdateRequest {
   content?: string;
   category?: string;
   tags?: string[];
+  change_description?: string;
+  create_version?: boolean;
 }
 
 export interface DocumentListResponse {
