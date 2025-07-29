@@ -105,12 +105,28 @@ export default function OrganizationsTab() {
       return;
     }
 
+    if (!selectedOrg) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
     setSearchLoading(true);
     try {
       const response = await api.get('/v1/users/search', {
-        params: { q: query, limit: 10 }
+        params: { 
+          q: query, 
+          limit: 20  // 增加搜索数量，因为前端会过滤
+        }
       });
-      setSearchResults(response.data);
+      
+      // 前端过滤：排除已经在组织中的用户
+      const existingMemberIds = new Set(members.map(member => member.user_id));
+      const filteredResults = response.data.filter((user: UserSearchResult) => 
+        !existingMemberIds.has(user.id)
+      );
+      
+      setSearchResults(filteredResults);
       setShowSearchResults(true);
     } catch (error) {
       console.error('Failed to search users:', error);
