@@ -66,6 +66,12 @@ export default function OrganizationsTab() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchContainerRef = useRef<HTMLDivElement>(null);
   
+  // 分页相关状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalMembers, setTotalMembers] = useState(0);
+  const [membersLoading, setMembersLoading] = useState(false);
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -215,13 +221,23 @@ export default function OrganizationsTab() {
     }
   };
 
-  const loadOrganizationMembers = async (orgId: number) => {
+  const loadOrganizationMembers = async (orgId: number, page: number = 1, size: number = 10) => {
+    setMembersLoading(true);
     try {
-      const response = await api.get(`/v1/organizations/${orgId}/members`);
-      setMembers(response.data);
+      const response = await api.get(`/v1/organizations/${orgId}/members`, {
+        params: {
+          skip: (page - 1) * size,
+          limit: size
+        }
+      });
+      setMembers(response.data.members || response.data);
+      setTotalMembers(response.data.total || response.data.length);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Failed to load members:', error);
       toast.error('加载成员列表失败');
+    } finally {
+      setMembersLoading(false);
     }
   };
 
@@ -244,7 +260,7 @@ export default function OrganizationsTab() {
       );
       
       await Promise.all(promises);
-      loadOrganizationMembers(selectedOrg.id);
+      loadOrganizationMembers(selectedOrg.id, currentPage, pageSize);
       setShowAddMember(false);
       setSelectedUsers([]);
       setMemberFormData({
@@ -267,7 +283,7 @@ export default function OrganizationsTab() {
       await api.put(`/v1/organizations/${selectedOrg.id}/members/${memberId}`, {
         role: newRole
       });
-      loadOrganizationMembers(selectedOrg.id);
+      loadOrganizationMembers(selectedOrg.id, currentPage, pageSize);
       toast.success('成员角色更新成功');
     } catch (error) {
       console.error('Failed to update member role:', error);
@@ -284,7 +300,7 @@ export default function OrganizationsTab() {
 
     try {
       await api.delete(`/v1/organizations/${selectedOrg.id}/members/${memberId}`);
-      loadOrganizationMembers(selectedOrg.id);
+      loadOrganizationMembers(selectedOrg.id, currentPage, pageSize);
       toast.success('成员移除成功');
     } catch (error) {
       console.error('Failed to remove member:', error);
@@ -295,7 +311,8 @@ export default function OrganizationsTab() {
   const openMembersModal = (org: Organization) => {
     setSelectedOrg(org);
     setShowMembers(true);
-    loadOrganizationMembers(org.id);
+    setCurrentPage(1);
+    loadOrganizationMembers(org.id, 1, pageSize);
   };
 
   return (
@@ -507,9 +524,29 @@ export default function OrganizationsTab() {
             </div>
 
             <div className="flex items-center justify-between mb-6">
-              <p className="text-gray-600">
-                管理组织成员和权限
-              </p>
+              <div className="flex items-center space-x-4">
+                <p className="text-gray-600">
+                  管理组织成员和权限
+                </p>
+                <div className="flex items-center space-x-2">
+                  <label className="text-sm text-gray-600">每页显示:</label>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      const newSize = parseInt(e.target.value);
+                      setPageSize(newSize);
+                      setCurrentPage(1);
+                      loadOrganizationMembers(selectedOrg.id, 1, newSize);
+                    }}
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
               <button
                 onClick={() => setShowAddMember(true)}
                 className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -519,61 +556,169 @@ export default function OrganizationsTab() {
               </button>
             </div>
 
-            {/* 成员列表 */}
-            <div className="space-y-4">
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-gray-600">
-                        {member.username.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-gray-900">
-                        {member.full_name || member.username}
-                      </h4>
-                      <p className="text-sm text-gray-500">{member.email}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                      {member.role === 'owner' && <Crown className="w-4 h-4 text-yellow-500" />}
-                      {member.role === 'admin' && <Shield className="w-4 h-4 text-blue-500" />}
-                      <span className="text-sm font-medium text-gray-700 capitalize">
-                        {member.role}
-                      </span>
-                    </div>
-                    <select
-                      value={member.role}
-                      onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
-                      className="px-3 py-1 border border-gray-300 rounded text-sm"
-                      disabled={member.role === 'owner'}
-                    >
-                      <option value="member">成员</option>
-                      <option value="admin">管理员</option>
-                      <option value="owner">所有者</option>
-                    </select>
-                    <button
-                      onClick={() => handleRemoveMember(member.id)}
-                      disabled={member.role === 'owner'}
-                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                      title="移除成员"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+            {/* 成员列表表格 */}
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {membersLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="ml-2 text-gray-600">加载中...</span>
                 </div>
-              ))}
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            用户
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            角色
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            加入时间
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            操作
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {members.map((member) => (
+                          <tr key={member.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+                                  <span className="text-sm font-medium text-gray-600">
+                                    {member.username.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900">
+                                    {member.full_name || member.username}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    {member.email}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-2">
+                                {member.role === 'owner' && <Crown className="w-4 h-4 text-yellow-500" />}
+                                {member.role === 'admin' && <Shield className="w-4 h-4 text-blue-500" />}
+                                <span className="text-sm font-medium text-gray-700 capitalize">
+                                  {member.role}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {new Date(member.joined_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center space-x-2">
+                                <select
+                                  value={member.role}
+                                  onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
+                                  className="px-2 py-1 border border-gray-300 rounded text-xs"
+                                  disabled={member.role === 'owner'}
+                                >
+                                  <option value="member">成员</option>
+                                  <option value="admin">管理员</option>
+                                  <option value="owner">所有者</option>
+                                </select>
+                                <button
+                                  onClick={() => handleRemoveMember(member.id)}
+                                  disabled={member.role === 'owner'}
+                                  className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                                  title="移除成员"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
 
-              {members.length === 0 && (
-                <div className="text-center py-8">
-                  <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">暂无成员</p>
-                </div>
+                  {members.length === 0 && (
+                    <div className="text-center py-8">
+                      <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                      <p className="text-gray-500">暂无成员</p>
+                    </div>
+                  )}
+
+                  {/* 分页组件 */}
+                  {totalMembers > pageSize && (
+                    <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+                      <div className="flex-1 flex justify-between sm:hidden">
+                        <button
+                          onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage - 1, pageSize)}
+                          disabled={currentPage === 1}
+                          className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          上一页
+                        </button>
+                        <button
+                          onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage + 1, pageSize)}
+                          disabled={currentPage >= Math.ceil(totalMembers / pageSize)}
+                          className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          下一页
+                        </button>
+                      </div>
+                      <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm text-gray-700">
+                            显示第 <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> 到{' '}
+                            <span className="font-medium">
+                              {Math.min(currentPage * pageSize, totalMembers)}
+                            </span>{' '}
+                            条，共 <span className="font-medium">{totalMembers}</span> 条记录
+                          </p>
+                        </div>
+                        <div>
+                          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            <button
+                              onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage - 1, pageSize)}
+                              disabled={currentPage === 1}
+                              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span className="sr-only">上一页</span>
+                              ←
+                            </button>
+                            {Array.from({ length: Math.min(5, Math.ceil(totalMembers / pageSize)) }, (_, i) => {
+                              const page = i + 1;
+                              return (
+                                <button
+                                  key={page}
+                                  onClick={() => loadOrganizationMembers(selectedOrg.id, page, pageSize)}
+                                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                                    currentPage === page
+                                      ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              );
+                            })}
+                            <button
+                              onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage + 1, pageSize)}
+                              disabled={currentPage >= Math.ceil(totalMembers / pageSize)}
+                              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <span className="sr-only">下一页</span>
+                              →
+                            </button>
+                          </nav>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
