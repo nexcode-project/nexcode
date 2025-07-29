@@ -41,6 +41,10 @@ class User(Base):
     document_versions = relationship("DocumentVersion", back_populates="user")
     commit_infos = relationship("CommitInfo", back_populates="user")
     collaborations = relationship("DocumentCollaborator", foreign_keys="DocumentCollaborator.user_id", back_populates="user")
+    
+    # 组织相关关系
+    owned_organizations = relationship("Organization", foreign_keys="Organization.owner_id", back_populates="owner")
+    organization_memberships = relationship("OrganizationMember", foreign_keys="OrganizationMember.user_id", back_populates="user")
 
 
 class CommitInfo(Base):
@@ -218,6 +222,9 @@ class Document(Base):
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     last_editor_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # 最后编辑者
 
+    # 组织关联
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
+
     # 文档属性
     category = Column(String(100), nullable=True)
     tags = Column(JSON, nullable=True)  # 存储标签数组
@@ -236,6 +243,7 @@ class Document(Base):
     collaborators = relationship("DocumentCollaborator", back_populates="document")
     operations = relationship("DocumentOperation", back_populates="document")
     versions = relationship("DocumentVersion", back_populates="document")
+    organization = relationship("Organization", back_populates="documents")
 
 
 class DocumentCollaborator(Base):
@@ -299,3 +307,54 @@ class DocumentVersion(Base):
     # 关系
     document = relationship("Document", back_populates="versions")
     user = relationship("User", back_populates="document_versions")
+
+
+class Organization(Base):
+    """组织表"""
+    
+    __tablename__ = "organizations"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    
+    # 组织设置
+    is_public = Column(Boolean, default=False)  # 是否公开组织
+    allow_member_invite = Column(Boolean, default=True)  # 是否允许成员邀请其他用户
+    require_admin_approval = Column(Boolean, default=False)  # 是否需要管理员审批新成员
+    
+    # 状态和时间
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # 关系
+    owner = relationship("User", foreign_keys=[owner_id], back_populates="owned_organizations")
+    members = relationship("OrganizationMember", back_populates="organization")
+    documents = relationship("Document", back_populates="organization")
+
+
+class OrganizationMember(Base):
+    """组织成员表"""
+    
+    __tablename__ = "organization_members"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role = Column(String(20), default="member")  # owner, admin, member
+    
+    # 成员信息
+    joined_at = Column(DateTime(timezone=True), server_default=func.now())
+    invited_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    is_active = Column(Boolean, default=True)
+    
+    # 关系
+    organization = relationship("Organization", back_populates="members")
+    user = relationship("User", foreign_keys=[user_id], back_populates="organization_memberships")
+    inviter = relationship("User", foreign_keys=[invited_by])
+
+
+

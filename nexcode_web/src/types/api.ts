@@ -239,4 +239,32 @@ export interface TokenScope {
 export interface ScopesResponse {
   scopes: TokenScope[];
   default_scopes: string[];
+}
+
+// ===================== 组织相关 =====================
+export interface Organization {
+  id: number;
+  name: string;
+  description: string | null;
+  avatar_url: string | null;
+  owner_id: number;
+  is_public: boolean;
+  allow_member_invite: boolean;
+  require_admin_approval: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OrganizationMember {
+  id: number;
+  organization_id: number;
+  user_id: number;
+  role: string;
+  joined_at: string;
+  invited_by: number | null;
+  is_active: boolean;
+  username: string;
+  email: string;
+  full_name: string | null;
 } 

@@ -415,6 +415,7 @@ def push(branch, message, auto_commit, dry_run, debug):
             return
         
         # 处理分支创建和切换
+        check_branch_confirm = False
         target_branch_name = suggested_branch or extracted_branch
         if target_branch_name and target_branch_name != current_branch:
             check_branch_confirm = click.confirm(f"是否创建并切换到建议的分支 '{target_branch_name}'?")
