@@ -1,0 +1,514 @@
+import { useState, useEffect } from 'react';
+import { toast } from 'react-hot-toast';
+import {
+  Building2,
+  Plus,
+  Users,
+  Settings,
+  Trash2,
+  UserPlus,
+  Crown,
+  Shield,
+  Eye,
+  EyeOff
+} from 'lucide-react';
+import { api } from '@/lib/api';
+
+interface Organization {
+  id: number;
+  name: string;
+  description: string | null;
+  avatar_url: string | null;
+  owner_id: number;
+  is_public: boolean;
+  allow_member_invite: boolean;
+  require_admin_approval: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface OrganizationMember {
+  id: number;
+  organization_id: number;
+  user_id: number;
+  role: string;
+  joined_at: string;
+  invited_by: number | null;
+  is_active: boolean;
+  username: string;
+  email: string;
+  full_name: string | null;
+}
+
+export default function OrganizationsTab() {
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
+  const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [showMembers, setShowMembers] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    is_public: false,
+    allow_member_invite: true,
+    require_admin_approval: false
+  });
+  const [memberFormData, setMemberFormData] = useState({
+    user_email: '',
+    role: 'member'
+  });
+
+  useEffect(() => {
+    loadOrganizations();
+  }, []);
+
+  const loadOrganizations = async () => {
+    try {
+      const response = await api.get('/v1/organizations');
+      setOrganizations(response.data);
+    } catch (error) {
+      console.error('Failed to load organizations:', error);
+      toast.error('加载组织列表失败');
+    }
+  };
+
+  const handleCreateOrganization = async () => {
+    if (!formData.name.trim()) {
+      toast.error('请输入组织名称');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.post('/v1/organizations', formData);
+      setOrganizations(prev => [response.data, ...prev]);
+      setShowCreateForm(false);
+      setFormData({
+        name: '',
+        description: '',
+        is_public: false,
+        allow_member_invite: true,
+        require_admin_approval: false
+      });
+      toast.success('组织创建成功');
+    } catch (error) {
+      console.error('Failed to create organization:', error);
+      toast.error('创建组织失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrganizationMembers = async (orgId: number) => {
+    try {
+      const response = await api.get(`/v1/organizations/${orgId}/members`);
+      setMembers(response.data);
+    } catch (error) {
+      console.error('Failed to load members:', error);
+      toast.error('加载成员列表失败');
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!memberFormData.user_email.trim()) {
+      toast.error('请输入用户邮箱');
+      return;
+    }
+
+    if (!selectedOrg) return;
+
+    try {
+      await api.post(`/v1/organizations/${selectedOrg.id}/members`, memberFormData);
+      loadOrganizationMembers(selectedOrg.id);
+      setShowAddMember(false);
+      setMemberFormData({
+        user_email: '',
+        role: 'member'
+      });
+      toast.success('成员添加成功');
+    } catch (error) {
+      console.error('Failed to add member:', error);
+      toast.error('添加成员失败');
+    }
+  };
+
+  const handleUpdateMemberRole = async (memberId: number, newRole: string) => {
+    if (!selectedOrg) return;
+
+    try {
+      await api.put(`/v1/organizations/${selectedOrg.id}/members/${memberId}`, {
+        role: newRole
+      });
+      loadOrganizationMembers(selectedOrg.id);
+      toast.success('成员角色更新成功');
+    } catch (error) {
+      console.error('Failed to update member role:', error);
+      toast.error('更新成员角色失败');
+    }
+  };
+
+  const handleRemoveMember = async (memberId: number) => {
+    if (!selectedOrg) return;
+
+    if (!confirm('确定要移除这个成员吗？')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/v1/organizations/${selectedOrg.id}/members/${memberId}`);
+      loadOrganizationMembers(selectedOrg.id);
+      toast.success('成员移除成功');
+    } catch (error) {
+      console.error('Failed to remove member:', error);
+      toast.error('移除成员失败');
+    }
+  };
+
+  const openMembersModal = (org: Organization) => {
+    setSelectedOrg(org);
+    setShowMembers(true);
+    loadOrganizationMembers(org.id);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            组织管理
+          </h2>
+          <p className="text-lg text-gray-600">
+            创建和管理您的组织，实现文档的权限管理
+          </p>
+        </div>
+        <button
+          onClick={() => setShowCreateForm(true)}
+          className="flex items-center space-x-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-3 rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-200 shadow-lg hover:shadow-xl"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="font-medium">新建组织</span>
+        </button>
+      </div>
+
+      {/* 组织列表 */}
+      <div className="space-y-4">
+        {organizations.map((org) => (
+          <div
+            key={org.id}
+            className="border border-gray-200 rounded-xl p-6 hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-semibold text-gray-900">
+                      {org.name}
+                    </h4>
+                    <p className="text-gray-500">
+                      {org.description || '暂无描述'}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center space-x-6 text-sm text-gray-500">
+                  <div className="flex items-center space-x-2">
+                    {org.is_public ? (
+                      <Eye className="w-4 h-4" />
+                    ) : (
+                      <EyeOff className="w-4 h-4" />
+                    )}
+                    <span>{org.is_public ? '公开组织' : '私有组织'}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Users className="w-4 h-4" />
+                    <span>成员管理</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Crown className="w-4 h-4" />
+                    <span>创建于 {new Date(org.created_at).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => openMembersModal(org)}
+                  className="p-3 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="管理成员"
+                >
+                  <Users className="w-5 h-5" />
+                </button>
+                <button
+                  className="p-3 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  title="组织设置"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {organizations.length === 0 && (
+          <div className="text-center py-12">
+            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Building2 className="w-12 h-12 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">暂无组织</h3>
+            <p className="text-gray-500 mb-6">点击"新建组织"创建您的第一个组织</p>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="inline-flex items-center space-x-2 bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              <span>创建第一个组织</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 创建组织模态框 */}
+      {showCreateForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 w-full max-w-lg mx-4 shadow-2xl">
+            <h3 className="text-2xl font-bold text-gray-900 mb-6">
+              创建组织
+            </h3>
+
+            <div className="space-y-6">
+              <div>
+                <label className="block text-lg font-medium text-gray-700 mb-3">
+                  组织名称
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="例如: 我的团队"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+                />
+              </div>
+
+              <div>
+                <label className="block text-lg font-medium text-gray-700 mb-3">
+                  组织描述
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="描述您的组织..."
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg"
+                />
+              </div>
+
+              <div className="space-y-4">
+                <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_public}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_public: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                  />
+                  <span className="ml-3 text-gray-700">
+                    <span className="font-medium">公开组织</span> - 其他用户可以搜索并申请加入
+                  </span>
+                </label>
+
+                <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.allow_member_invite}
+                    onChange={(e) => setFormData(prev => ({ ...prev, allow_member_invite: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                  />
+                  <span className="ml-3 text-gray-700">
+                    <span className="font-medium">允许成员邀请</span> - 成员可以邀请其他用户加入
+                  </span>
+                </label>
+
+                <label className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.require_admin_approval}
+                    onChange={(e) => setFormData(prev => ({ ...prev, require_admin_approval: e.target.checked }))}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5"
+                  />
+                  <span className="ml-3 text-gray-700">
+                    <span className="font-medium">需要管理员审批</span> - 新成员加入需要管理员审批
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-4 mt-8">
+              <button
+                onClick={() => setShowCreateForm(false)}
+                className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleCreateOrganization}
+                disabled={loading || !formData.name.trim()}
+                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 transition-all duration-200 font-medium"
+              >
+                {loading ? '创建中...' : '创建组织'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 成员管理模态框 */}
+      {showMembers && selectedOrg && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 w-full max-w-4xl mx-4 shadow-2xl max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold text-gray-900">
+                {selectedOrg.name} - 成员管理
+              </h3>
+              <button
+                onClick={() => setShowMembers(false)}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <span className="sr-only">关闭</span>
+                ×
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between mb-6">
+              <p className="text-gray-600">
+                管理组织成员和权限
+              </p>
+              <button
+                onClick={() => setShowAddMember(true)}
+                className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>添加成员</span>
+              </button>
+            </div>
+
+            {/* 成员列表 */}
+            <div className="space-y-4">
+              {members.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
+                >
+                  <div className="flex items-center space-x-4">
+                    <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-medium text-gray-600">
+                        {member.username.charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        {member.full_name || member.username}
+                      </h4>
+                      <p className="text-sm text-gray-500">{member.email}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      {member.role === 'owner' && <Crown className="w-4 h-4 text-yellow-500" />}
+                      {member.role === 'admin' && <Shield className="w-4 h-4 text-blue-500" />}
+                      <span className="text-sm font-medium text-gray-700 capitalize">
+                        {member.role}
+                      </span>
+                    </div>
+                    <select
+                      value={member.role}
+                      onChange={(e) => handleUpdateMemberRole(member.id, e.target.value)}
+                      className="px-3 py-1 border border-gray-300 rounded text-sm"
+                      disabled={member.role === 'owner'}
+                    >
+                      <option value="member">成员</option>
+                      <option value="admin">管理员</option>
+                      <option value="owner">所有者</option>
+                    </select>
+                    <button
+                      onClick={() => handleRemoveMember(member.id)}
+                      disabled={member.role === 'owner'}
+                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      title="移除成员"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {members.length === 0 && (
+                <div className="text-center py-8">
+                  <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">暂无成员</p>
+                </div>
+              )}
+            </div>
+
+            {/* 添加成员模态框 */}
+            {showAddMember && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-xl p-8 w-full max-w-md mx-4 shadow-2xl">
+                  <h4 className="text-xl font-bold text-gray-900 mb-6">
+                    添加成员
+                  </h4>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        用户邮箱
+                      </label>
+                      <input
+                        type="email"
+                        value={memberFormData.user_email}
+                        onChange={(e) => setMemberFormData(prev => ({ ...prev, user_email: e.target.value }))}
+                        placeholder="user@example.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        角色
+                      </label>
+                      <select
+                        value={memberFormData.role}
+                        onChange={(e) => setMemberFormData(prev => ({ ...prev, role: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="member">成员</option>
+                        <option value="admin">管理员</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-4 mt-6">
+                    <button
+                      onClick={() => setShowAddMember(false)}
+                      className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleAddMember}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      添加
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+} 

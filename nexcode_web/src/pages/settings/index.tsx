@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, User, Key, Building2 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import SettingsNavigation from './SettingsNavigation';
 import ProfileTab from './ProfileTab';
 import TokensTab from './TokensTab';
+import OrganizationsTab from './OrganizationsTab';
 
 export default function UserSettings() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function UserSettings() {
 
     // 从URL参数获取要显示的标签页
     const tab = router.query.tab as string;
-    if (tab && (tab === 'profile' || tab === 'tokens')) {
+    if (tab && (tab === 'profile' || tab === 'tokens' || tab === 'organizations')) {
       setActiveTab(tab);
     }
   }, [isAuthenticated, router.query.tab]);
@@ -81,6 +82,7 @@ export default function UserSettings() {
                     }} />
                   )}
                   {activeTab === 'tokens' && <TokensTab />}
+                  {activeTab === 'organizations' && <OrganizationsTab />}
                 </div>
               </div>
             </div>
