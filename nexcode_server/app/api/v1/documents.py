@@ -61,6 +61,7 @@ async def create_document(
         content=document_data.content,
         category=document_data.category,
         tags=document_data.tags,
+        organization_id=document_data.organization_id,
     )
     user_info = user_to_dict(current_user)
     # 设置用户权限信息
@@ -91,6 +92,7 @@ async def get_user_documents(
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
+    organization_id: Optional[int] = Query(None),
 ):
     """获取用户文档列表"""
     result = await document_service.get_user_documents(
@@ -98,6 +100,7 @@ async def get_user_documents(
         user_id=current_user.id,
         skip=skip,
         limit=limit,
+        organization_id=organization_id,
         search=search,
         category=category,
     )

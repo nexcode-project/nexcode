@@ -27,6 +27,7 @@ class DocumentCreate(BaseModel):
     content: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
     tags: Optional[List[str]] = None
+    organization_id: Optional[int] = Field(None, description="组织ID")
 
 
 class DocumentUpdate(BaseModel):
@@ -69,6 +70,7 @@ class DocumentResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    organization_id: Optional[int] = None
 
     owner: UserInfo
     collaborators: List[CollaboratorResponse] = []
@@ -91,6 +93,7 @@ class DocumentListItem(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    organization_id: Optional[int] = None
     owner: UserInfo
     user_permission: Optional[PermissionLevel] = None
 

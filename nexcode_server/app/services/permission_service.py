@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_
 from fastapi import HTTPException, status
 
-from app.models.database import Document, DocumentCollaborator, PermissionLevel
+from app.models.database import Document, DocumentCollaborator, PermissionLevel, Organization, OrganizationMember
 from app.models.database import User
 
 class PermissionService:
@@ -59,13 +59,48 @@ class PermissionService:
         return user_permission_level >= required_permission_level
     
     @staticmethod
+    async def check_organization_permission(
+        db: AsyncSession,
+        user_id: int,
+        organization_id: int,
+        required_role: str = "member"
+    ) -> bool:
+        """检查用户对组织的权限"""
+        
+        stmt = select(OrganizationMember).where(
+            and_(
+                OrganizationMember.organization_id == organization_id,
+                OrganizationMember.user_id == user_id,
+                OrganizationMember.is_active == True
+            )
+        )
+        result = await db.execute(stmt)
+        member = result.scalar_one_or_none()
+        
+        if not member:
+            return False
+        
+        # 角色权限检查
+        role_hierarchy = {
+            "member": 1,
+            "admin": 2,
+            "owner": 3
+        }
+        
+        user_role_level = role_hierarchy.get(member.role, 0)
+        required_role_level = role_hierarchy.get(required_role, 0)
+        
+        return user_role_level >= required_role_level
+    
+    @staticmethod
     async def get_user_documents(
         db: AsyncSession,
         user_id: int,
         skip: int = 0,
         limit: int = 100,
         search: Optional[str] = None,
-        category: Optional[str] = None
+        category: Optional[str] = None,
+        organization_id: Optional[int] = None
     ) -> List[Document]:
         """获取用户有权限访问的文档列表"""
         
@@ -81,6 +116,28 @@ class PermissionService:
                 )
             )
         ]
+        
+        # 如果指定了组织，检查用户是否有权限访问该组织的文档
+        if organization_id:
+            has_org_permission = await PermissionService.check_organization_permission(
+                db, user_id, organization_id, "member"
+            )
+            if has_org_permission:
+                # 添加组织文档条件
+                conditions.append(
+                    or_(
+                        Document.organization_id == organization_id,
+                        Document.owner_id == user_id,
+                        Document.id.in_(
+                            select(DocumentCollaborator.document_id).where(
+                                DocumentCollaborator.user_id == user_id
+                            )
+                        )
+                    )
+                )
+            else:
+                # 如果没有组织权限，只返回用户自己的文档
+                conditions.append(Document.owner_id == user_id)
         
         if search:
             search_condition = or_(

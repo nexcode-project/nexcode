@@ -38,6 +38,7 @@ class DocumentService:
         content: Optional[str] = None,
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        organization_id: Optional[int] = None,
     ) -> Document:
         """创建文档（仅元数据，内容存储在ShareDB）"""
 
@@ -49,6 +50,7 @@ class DocumentService:
             tags=",".join(tags) if tags else None,
             owner_id=user_id,
             last_editor_id=user_id,
+            organization_id=organization_id,
             version=0,  # ShareDB 管理版本
         )
 
@@ -209,6 +211,7 @@ class DocumentService:
         category: Optional[str] = None,
         tags: Optional[List[str]] = None,
         search: Optional[str] = None,
+        organization_id: Optional[int] = None,
         skip: int = 0,
         limit: int = 20,
     ) -> List[Document]:
@@ -404,6 +407,7 @@ class DocumentService:
         limit: int = 100,
         search: Optional[str] = None,
         category: Optional[str] = None,
+        organization_id: Optional[int] = None,
     ) -> Dict:
         """获取用户的文档列表，带分页信息"""
         # 基础查询条件
@@ -415,6 +419,27 @@ class DocumentService:
                 )
             ),
         )
+        
+        # 如果指定了组织，检查用户是否有权限访问该组织的文档
+        if organization_id:
+            from app.services.permission_service import PermissionService
+            has_org_permission = await PermissionService.check_organization_permission(
+                db, user_id, organization_id, "member"
+            )
+            if has_org_permission:
+                # 添加组织文档条件
+                base_condition = or_(
+                    Document.organization_id == organization_id,
+                    Document.owner_id == user_id,
+                    Document.id.in_(
+                        select(DocumentCollaborator.document_id).where(
+                            DocumentCollaborator.user_id == user_id
+                        )
+                    )
+                )
+            else:
+                # 如果没有组织权限，只返回用户自己的文档
+                base_condition = Document.owner_id == user_id
         query = select(Document).where(base_condition)
         count_query = select(func.count()).select_from(Document).where(base_condition)
 
