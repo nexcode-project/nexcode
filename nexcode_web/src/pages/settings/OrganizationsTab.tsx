@@ -77,6 +77,7 @@ export default function OrganizationsTab() {
     user_email: '',
     role: 'member'
   });
+  const [selectedUsers, setSelectedUsers] = useState<UserSearchResult[]>([]);
 
   useEffect(() => {
     loadOrganizations();
@@ -135,11 +136,15 @@ export default function OrganizationsTab() {
 
   const selectUser = (user: UserSearchResult) => {
     console.log('选择用户:', user);
-    setMemberFormData(prev => ({
-      ...prev,
-      user_email: user.email
-    }));
-    setSearchQuery(user.username);
+    // 检查用户是否已经被选择
+    const isAlreadySelected = selectedUsers.some(selectedUser => selectedUser.id === user.id);
+    if (isAlreadySelected) {
+      toast.error('该用户已被选择');
+      return;
+    }
+    
+    setSelectedUsers(prev => [...prev, user]);
+    setSearchQuery('');
     setShowSearchResults(false);
   };
 
@@ -147,10 +152,14 @@ export default function OrganizationsTab() {
     setSearchQuery('');
     setSearchResults([]);
     setShowSearchResults(false);
-    setMemberFormData(prev => ({
-      ...prev,
-      user_email: ''
-    }));
+  };
+
+  const removeSelectedUser = (userId: number) => {
+    setSelectedUsers(prev => prev.filter(user => user.id !== userId));
+  };
+
+  const clearAllSelectedUsers = () => {
+    setSelectedUsers([]);
   };
 
   const loadOrganizations = async () => {
@@ -200,26 +209,38 @@ export default function OrganizationsTab() {
     }
   };
 
-  const handleAddMember = async () => {
-    if (!memberFormData.user_email.trim()) {
-      toast.error('请输入用户邮箱');
+  const handleAddMembers = async () => {
+    if (selectedUsers.length === 0) {
+      toast.error('请至少选择一个用户');
       return;
     }
 
     if (!selectedOrg) return;
 
+    setLoading(true);
     try {
-      await api.post(`/v1/organizations/${selectedOrg.id}/members`, memberFormData);
+      // 批量添加用户
+      const promises = selectedUsers.map(user => 
+        api.post(`/v1/organizations/${selectedOrg.id}/members`, {
+          user_email: user.email,
+          role: memberFormData.role
+        })
+      );
+      
+      await Promise.all(promises);
       loadOrganizationMembers(selectedOrg.id);
       setShowAddMember(false);
+      setSelectedUsers([]);
       setMemberFormData({
         user_email: '',
         role: 'member'
       });
-      toast.success('成员添加成功');
+      toast.success(`成功添加 ${selectedUsers.length} 个成员`);
     } catch (error) {
-      console.error('Failed to add member:', error);
+      console.error('Failed to add members:', error);
       toast.error('添加成员失败');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -543,7 +564,7 @@ export default function OrganizationsTab() {
             {/* 添加成员模态框 */}
             {showAddMember && (
               <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-xl p-8 w-full max-w-md mx-4 shadow-2xl">
+                <div className="bg-white rounded-xl p-8 w-full max-w-lg mx-4 shadow-2xl max-h-[80vh] overflow-y-auto">
                   <h4 className="text-xl font-bold text-gray-900 mb-6">
                     添加成员
                   </h4>
@@ -629,10 +650,50 @@ export default function OrganizationsTab() {
                       </select>
                     </div>
 
-                    {memberFormData.user_email && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                        <div className="text-sm text-blue-800">
-                          <strong>已选择用户：</strong> {memberFormData.user_email}
+                    {/* 已选择的用户列表 */}
+                    {selectedUsers.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-sm font-medium text-gray-700">
+                            已选择的用户 ({selectedUsers.length})
+                          </label>
+                          <button
+                            onClick={clearAllSelectedUsers}
+                            className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-2 py-1 rounded"
+                          >
+                            清空全部
+                          </button>
+                        </div>
+                        <div className="max-h-40 overflow-y-auto space-y-2">
+                          {selectedUsers.map((user) => (
+                            <div
+                              key={user.id}
+                              className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg"
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {user.username.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="font-medium text-gray-900">
+                                    {user.full_name || user.username}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    @{user.username} • {user.email}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeSelectedUser(user.id)}
+                                className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                                title="移除用户"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -643,17 +704,18 @@ export default function OrganizationsTab() {
                       onClick={() => {
                         setShowAddMember(false);
                         clearSearch();
+                        setSelectedUsers([]);
                       }}
                       className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       取消
                     </button>
                     <button
-                      onClick={handleAddMember}
-                      disabled={!memberFormData.user_email}
+                      onClick={handleAddMembers}
+                      disabled={selectedUsers.length === 0}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                     >
-                      添加
+                      {loading ? '添加中...' : `添加 ${selectedUsers.length} 个用户`}
                     </button>
                   </div>
                 </div>

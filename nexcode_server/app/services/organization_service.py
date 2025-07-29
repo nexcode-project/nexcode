@@ -215,7 +215,7 @@ class OrganizationService:
             User.username,
             User.email,
             User.full_name
-        ).join(User).where(
+        ).join(User, OrganizationMember.user_id == User.id).where(
             and_(
                 OrganizationMember.organization_id == organization_id,
                 OrganizationMember.is_active == True
