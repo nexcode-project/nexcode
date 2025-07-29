@@ -524,29 +524,9 @@ export default function OrganizationsTab() {
             </div>
 
             <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center space-x-4">
-                <p className="text-gray-600">
-                  管理组织成员和权限
-                </p>
-                <div className="flex items-center space-x-2">
-                  <label className="text-sm text-gray-600">每页显示:</label>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      const newSize = parseInt(e.target.value);
-                      setPageSize(newSize);
-                      setCurrentPage(1);
-                      loadOrganizationMembers(selectedOrg.id, 1, newSize);
-                    }}
-                    className="px-2 py-1 border border-gray-300 rounded text-sm"
-                  >
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
-                </div>
-              </div>
+              <p className="text-gray-600">
+                管理组织成员和权限
+              </p>
               <button
                 onClick={() => setShowAddMember(true)}
                 className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -650,77 +630,159 @@ export default function OrganizationsTab() {
                     </div>
                   )}
 
-                  {/* 分页组件 */}
-                  {totalMembers > pageSize && (
-                    <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
-                      <div className="flex-1 flex justify-between sm:hidden">
-                        <button
-                          onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage - 1, pageSize)}
-                          disabled={currentPage === 1}
-                          className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          上一页
-                        </button>
-                        <button
-                          onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage + 1, pageSize)}
-                          disabled={currentPage >= Math.ceil(totalMembers / pageSize)}
-                          className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          下一页
-                        </button>
-                      </div>
-                      <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm text-gray-700">
-                            显示第 <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> 到{' '}
-                            <span className="font-medium">
-                              {Math.min(currentPage * pageSize, totalMembers)}
-                            </span>{' '}
-                            条，共 <span className="font-medium">{totalMembers}</span> 条记录
-                          </p>
-                        </div>
-                        <div>
-                          <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                            <button
-                              onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage - 1, pageSize)}
-                              disabled={currentPage === 1}
-                              className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <span className="sr-only">上一页</span>
-                              ←
-                            </button>
-                            {Array.from({ length: Math.min(5, Math.ceil(totalMembers / pageSize)) }, (_, i) => {
-                              const page = i + 1;
-                              return (
-                                <button
-                                  key={page}
-                                  onClick={() => loadOrganizationMembers(selectedOrg.id, page, pageSize)}
-                                  className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                    currentPage === page
-                                      ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
-                                      : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
-                                  }`}
-                                >
-                                  {page}
-                                </button>
-                              );
-                            })}
-                            <button
-                              onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage + 1, pageSize)}
-                              disabled={currentPage >= Math.ceil(totalMembers / pageSize)}
-                              className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              <span className="sr-only">下一页</span>
-                              →
-                            </button>
-                          </nav>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
+
+            {/* 分页组件 - 美化版 */}
+            {totalMembers > 0 && !membersLoading && (
+              <div className="bg-gradient-to-r from-gray-50 to-white px-6 py-4 border-t border-gray-200 rounded-b-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                  {/* 页面大小选择器 */}
+                  <div className="flex items-center space-x-3 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-100">
+                    <span className="text-sm text-gray-600 font-medium">每页显示</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        const newSize = parseInt(e.target.value);
+                        setPageSize(newSize);
+                        setCurrentPage(1);
+                        loadOrganizationMembers(selectedOrg.id, 1, newSize);
+                      }}
+                      className="px-3 py-1 border border-gray-200 rounded-md text-sm font-medium bg-white hover:border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                    >
+                      <option value={5}>5 条</option>
+                      <option value={10}>10 条</option>
+                      <option value={20}>20 条</option>
+                      <option value={50}>50 条</option>
+                    </select>
+                  </div>
+
+                  {/* 分页信息（右对齐） */}
+                  <div className="flex items-center space-x-2 text-sm text-gray-600 bg-white px-3 py-2 rounded-lg shadow-sm border border-gray-100">
+                    <span className="text-gray-500">显示第</span>
+                    <span className="font-semibold text-blue-600">{Math.min((currentPage - 1) * pageSize + 1, totalMembers)}</span>
+                    <span className="text-gray-500">到</span>
+                    <span className="font-semibold text-blue-600">{Math.min(currentPage * pageSize, totalMembers)}</span>
+                    <span className="text-gray-500">条，共</span>
+                    <span className="font-semibold text-green-600">{totalMembers}</span>
+                    <span className="text-gray-500">条记录</span>
+                  </div>
+
+                  {/* 分页导航 */}
+                  {totalMembers > pageSize && (
+                    <div className="flex items-center space-x-1">
+                      {/* 上一页按钮 */}
+                      <button
+                        onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage - 1, pageSize)}
+                        disabled={currentPage === 1}
+                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-all duration-200 shadow-sm"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                        上一页
+                      </button>
+
+                      {/* 页码按钮 */}
+                      <div className="hidden sm:flex items-center space-x-1">
+                        {(() => {
+                          const totalPages = Math.ceil(totalMembers / pageSize);
+                          const maxVisiblePages = 5;
+                          let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+                          let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                          
+                          // 调整起始页以确保显示正确数量的页码
+                          if (endPage - startPage + 1 < maxVisiblePages) {
+                            startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                          }
+
+                          const pages = [];
+                          
+                          // 第一页和省略号
+                          if (startPage > 1) {
+                            pages.push(
+                              <button
+                                key={1}
+                                onClick={() => loadOrganizationMembers(selectedOrg.id, 1, pageSize)}
+                                className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 shadow-sm"
+                              >
+                                1
+                              </button>
+                            );
+                            if (startPage > 2) {
+                              pages.push(
+                                <span key="ellipsis1" className="px-2 py-2 text-gray-400 text-sm">
+                                  ⋯
+                                </span>
+                              );
+                            }
+                          }
+
+                          // 当前页面范围
+                          for (let page = startPage; page <= endPage; page++) {
+                            pages.push(
+                              <button
+                                key={page}
+                                onClick={() => loadOrganizationMembers(selectedOrg.id, page, pageSize)}
+                                className={`inline-flex items-center px-3 py-2 border rounded-lg text-sm font-medium transition-all duration-200 shadow-sm ${
+                                  currentPage === page
+                                    ? 'bg-gradient-to-r from-blue-600 to-blue-700 border-blue-600 text-white shadow-blue-200'
+                                    : 'bg-white border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            );
+                          }
+
+                          // 最后一页和省略号
+                          if (endPage < totalPages) {
+                            if (endPage < totalPages - 1) {
+                              pages.push(
+                                <span key="ellipsis2" className="px-2 py-2 text-gray-400 text-sm">
+                                  ⋯
+                                </span>
+                              );
+                            }
+                            pages.push(
+                              <button
+                                key={totalPages}
+                                onClick={() => loadOrganizationMembers(selectedOrg.id, totalPages, pageSize)}
+                                className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 transition-all duration-200 shadow-sm"
+                              >
+                                {totalPages}
+                              </button>
+                            );
+                          }
+
+                          return pages;
+                        })()}
+                      </div>
+
+                      {/* 移动端页码信息 */}
+                      <div className="sm:hidden bg-white px-3 py-2 rounded-lg border border-gray-200 shadow-sm">
+                        <span className="text-sm text-gray-600">第</span>
+                        <span className="text-sm font-semibold text-blue-600 mx-1">{currentPage}</span>
+                        <span className="text-sm text-gray-600">/ {Math.ceil(totalMembers / pageSize)} 页</span>
+                      </div>
+
+                      {/* 下一页按钮 */}
+                      <button
+                        onClick={() => loadOrganizationMembers(selectedOrg.id, currentPage + 1, pageSize)}
+                        disabled={currentPage >= Math.ceil(totalMembers / pageSize)}
+                        className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-all duration-200 shadow-sm"
+                      >
+                        下一页
+                        <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 添加成员模态框 */}
             {showAddMember && (
