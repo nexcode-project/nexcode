@@ -64,6 +64,7 @@ export default function OrganizationsTab() {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout>();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -84,7 +85,7 @@ export default function OrganizationsTab() {
   // 点击外部关闭搜索结果
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
         setShowSearchResults(false);
       }
     };
@@ -133,6 +134,7 @@ export default function OrganizationsTab() {
   };
 
   const selectUser = (user: UserSearchResult) => {
+    console.log('选择用户:', user);
     setMemberFormData(prev => ({
       ...prev,
       user_email: user.email
@@ -547,7 +549,7 @@ export default function OrganizationsTab() {
                   </h4>
 
                   <div className="space-y-4">
-                    <div className="relative">
+                    <div className="relative" ref={searchContainerRef}>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         搜索用户
                       </label>
@@ -569,44 +571,48 @@ export default function OrganizationsTab() {
                             <X className="w-4 h-4" />
                           </button>
                         )}
+                        
+                        {/* 搜索结果下拉框 */}
+                        {showSearchResults && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto top-full">
+                            {searchLoading ? (
+                              <div className="p-4 text-center text-gray-500">
+                                搜索中...
+                              </div>
+                            ) : searchResults.length > 0 ? (
+                              searchResults.map((user) => (
+                                <button
+                                  key={user.id}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    selectUser(user);
+                                  }}
+                                  className="w-full p-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center space-x-3"
+                                >
+                                  <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                                    <span className="text-sm font-medium text-blue-600">
+                                      {user.username.charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="font-medium text-gray-900">
+                                      {user.full_name || user.username}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      @{user.username} • {user.email}
+                                    </div>
+                                  </div>
+                                </button>
+                              ))
+                            ) : searchQuery.trim() ? (
+                              <div className="p-4 text-center text-gray-500">
+                                未找到匹配的用户
+                              </div>
+                            ) : null}
+                          </div>
+                        )}
                       </div>
-                      
-                      {/* 搜索结果下拉框 */}
-                      {showSearchResults && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                          {searchLoading ? (
-                            <div className="p-4 text-center text-gray-500">
-                              搜索中...
-                            </div>
-                          ) : searchResults.length > 0 ? (
-                            searchResults.map((user) => (
-                              <button
-                                key={user.id}
-                                onClick={() => selectUser(user)}
-                                className="w-full p-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center space-x-3"
-                              >
-                                <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
-                                  <span className="text-sm font-medium text-blue-600">
-                                    {user.username.charAt(0).toUpperCase()}
-                                  </span>
-                                </div>
-                                <div className="flex-1">
-                                  <div className="font-medium text-gray-900">
-                                    {user.full_name || user.username}
-                                  </div>
-                                  <div className="text-sm text-gray-500">
-                                    @{user.username} • {user.email}
-                                  </div>
-                                </div>
-                              </button>
-                            ))
-                          ) : searchQuery.trim() ? (
-                            <div className="p-4 text-center text-gray-500">
-                              未找到匹配的用户
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
                     </div>
 
                     <div>
