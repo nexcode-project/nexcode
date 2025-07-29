@@ -267,4 +267,11 @@ export interface OrganizationMember {
   username: string;
   email: string;
   full_name: string | null;
+}
+
+export interface UserSearchResult {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string | null;
 } 

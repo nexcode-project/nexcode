@@ -150,6 +150,43 @@ async def revoke_user_api_key(
     
     return {"message": "API key revoked successfully"}
 
+@router.get("/search")
+async def search_users(
+    current_user: CurrentUser,
+    db: DatabaseSession,
+    q: str = "",
+    limit: int = 10
+):
+    """搜索用户（用于组织邀请等场景）"""
+    from sqlalchemy import select, or_
+    from app.models.database import User
+    
+    if not q.strip():
+        return []
+    
+    # 搜索用户名、邮箱或全名
+    stmt = select(User).where(
+        or_(
+            User.username.ilike(f"%{q}%"),
+            User.email.ilike(f"%{q}%"),
+            User.full_name.ilike(f"%{q}%") if User.full_name else False
+        ),
+        User.is_active == True
+    ).limit(limit)
+    
+    result = await db.execute(stmt)
+    users = result.scalars().all()
+    
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name
+        }
+        for user in users
+    ]
+
 @router.get("/me/api-keys/scopes")
 async def get_available_token_scopes():
     """获取可用的API Token权限范围"""

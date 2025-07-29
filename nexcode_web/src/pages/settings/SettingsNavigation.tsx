@@ -19,7 +19,7 @@ export default function SettingsNavigation({ activeTab, onTabChange }: SettingsN
             }`}
           >
             <User className={`w-5 h-5 ${activeTab === 'profile' ? 'text-blue-600' : 'text-gray-400'}`} />
-            <span className="font-medium">个人资料</span>
+            <span className="font-medium">Profile</span>
           </button>
           <button
             onClick={() => onTabChange('tokens')}
@@ -41,7 +41,7 @@ export default function SettingsNavigation({ activeTab, onTabChange }: SettingsN
             }`}
           >
             <Building2 className={`w-5 h-5 ${activeTab === 'organizations' ? 'text-blue-600' : 'text-gray-400'}`} />
-            <span className="font-medium">组织管理</span>
+            <span className="font-medium">Organizations</span>
           </button>
         </nav>
       </div>

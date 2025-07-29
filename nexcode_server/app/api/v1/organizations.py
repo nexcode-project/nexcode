@@ -130,6 +130,17 @@ async def add_organization_member(
     db: AsyncSession = Depends(get_db)
 ):
     """添加组织成员"""
+    # 检查用户是否有权限添加成员
+    has_permission = await organization_service.check_organization_permission(
+        db, current_user.id, organization_id, "admin"
+    )
+    
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="权限不足，只有管理员或所有者可以添加成员"
+        )
+    
     member = await organization_service.add_organization_member(
         db=db,
         organization_id=organization_id,

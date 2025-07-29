@@ -104,7 +104,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                           className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         >
                           <User className="w-4 h-4 mr-3" />
-                          个人资料
+                          Profile
                         </Link>
                         <Link
                           href="/settings?tab=tokens"
@@ -113,6 +113,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         >
                           <Settings className="w-4 h-4 mr-3" />
                           Personal Access Tokens
+                        </Link>
+                        <Link
+                          href="/settings?tab=organizations"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <Settings className="w-4 h-4 mr-3" />
+                         Organizations
                         </Link>
                       </div>
 
