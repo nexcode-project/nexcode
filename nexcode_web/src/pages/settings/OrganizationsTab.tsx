@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   Building2,
@@ -10,7 +10,9 @@ import {
   Crown,
   Shield,
   Eye,
-  EyeOff
+  EyeOff,
+  Search,
+  X
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -41,6 +43,13 @@ interface OrganizationMember {
   full_name: string | null;
 }
 
+interface UserSearchResult {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string | null;
+}
+
 export default function OrganizationsTab() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,6 +58,13 @@ export default function OrganizationsTab() {
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [showMembers, setShowMembers] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -64,6 +80,76 @@ export default function OrganizationsTab() {
   useEffect(() => {
     loadOrganizations();
   }, []);
+
+  // 点击外部关闭搜索结果
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchInputRef.current && !searchInputRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // 用户搜索功能
+  const searchUsers = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const response = await api.get('/v1/users/search', {
+        params: { q: query, limit: 10 }
+      });
+      setSearchResults(response.data);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleSearchInputChange = (value: string) => {
+    setSearchQuery(value);
+    
+    // 清除之前的定时器
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    // 设置新的定时器，防抖搜索
+    searchTimeoutRef.current = setTimeout(() => {
+      searchUsers(value);
+    }, 300);
+  };
+
+  const selectUser = (user: UserSearchResult) => {
+    setMemberFormData(prev => ({
+      ...prev,
+      user_email: user.email
+    }));
+    setSearchQuery(user.username);
+    setShowSearchResults(false);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setMemberFormData(prev => ({
+      ...prev,
+      user_email: ''
+    }));
+  };
 
   const loadOrganizations = async () => {
     try {
@@ -461,17 +547,66 @@ export default function OrganizationsTab() {
                   </h4>
 
                   <div className="space-y-4">
-                    <div>
+                    <div className="relative">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        用户邮箱
+                        搜索用户
                       </label>
-                      <input
-                        type="email"
-                        value={memberFormData.user_email}
-                        onChange={(e) => setMemberFormData(prev => ({ ...prev, user_email: e.target.value }))}
-                        placeholder="user@example.com"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                      <div className="relative">
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => handleSearchInputChange(e.target.value)}
+                          placeholder="输入用户名、邮箱或姓名搜索..."
+                          className="w-full px-3 py-2 pl-10 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                        {searchQuery && (
+                          <button
+                            onClick={clearSearch}
+                            className="absolute right-3 top-2.5 w-4 h-4 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      
+                      {/* 搜索结果下拉框 */}
+                      {showSearchResults && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {searchLoading ? (
+                            <div className="p-4 text-center text-gray-500">
+                              搜索中...
+                            </div>
+                          ) : searchResults.length > 0 ? (
+                            searchResults.map((user) => (
+                              <button
+                                key={user.id}
+                                onClick={() => selectUser(user)}
+                                className="w-full p-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center space-x-3"
+                              >
+                                <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {user.username.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-medium text-gray-900">
+                                    {user.full_name || user.username}
+                                  </div>
+                                  <div className="text-sm text-gray-500">
+                                    @{user.username} • {user.email}
+                                  </div>
+                                </div>
+                              </button>
+                            ))
+                          ) : searchQuery.trim() ? (
+                            <div className="p-4 text-center text-gray-500">
+                              未找到匹配的用户
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -487,18 +622,30 @@ export default function OrganizationsTab() {
                         <option value="admin">管理员</option>
                       </select>
                     </div>
+
+                    {memberFormData.user_email && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="text-sm text-blue-800">
+                          <strong>已选择用户：</strong> {memberFormData.user_email}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-end space-x-4 mt-6">
                     <button
-                      onClick={() => setShowAddMember(false)}
+                      onClick={() => {
+                        setShowAddMember(false);
+                        clearSearch();
+                      }}
                       className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     >
                       取消
                     </button>
                     <button
                       onClick={handleAddMember}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      disabled={!memberFormData.user_email}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
                     >
                       添加
                     </button>
