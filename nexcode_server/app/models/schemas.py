@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Dict, Any
+from datetime import datetime
 
 
 # 基础API配置模型 - CLI传递给服务端使用
@@ -109,9 +110,59 @@ class IntelligentQAResponse(BaseModel):
     suggested_actions: List[str] = []
 
 
-# 服务健康检查
+# 健康检查
 class HealthCheckResponse(BaseModel):
     status: str
     version: str
     services: Dict[str, str]
     timestamp: str
+
+
+# ===================== 组织相关模型 =====================
+
+class OrganizationCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_public: bool = False
+    allow_member_invite: bool = True
+    require_admin_approval: bool = False
+
+
+class OrganizationResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    avatar_url: Optional[str] = None
+    owner_id: int
+    is_public: bool
+    allow_member_invite: bool
+    require_admin_approval: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class OrganizationMemberCreate(BaseModel):
+    user_email: str
+    role: str = "member"  # owner, admin, member
+
+
+class OrganizationMemberUpdate(BaseModel):
+    role: str  # owner, admin, member
+
+
+class OrganizationMemberResponse(BaseModel):
+    id: int
+    organization_id: int
+    user_id: int
+    role: str
+    joined_at: datetime
+    invited_by: Optional[int] = None
+    is_active: bool
+    username: Optional[str] = None
+    email: Optional[str] = None
+    full_name: Optional[str] = None
+
+
+
