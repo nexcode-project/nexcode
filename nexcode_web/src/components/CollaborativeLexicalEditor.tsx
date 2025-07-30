@@ -7,12 +7,16 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
-import { $getRoot, EditorState, $createParagraphNode, $createTextNode } from 'lexical';
+import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND, SELECTION_CHANGE_COMMAND } from 'lexical';
+import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
+import { $createHeadingNode } from '@lexical/rich-text';
+import { $createQuoteNode } from '@lexical/rich-text';
+import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X } from 'lucide-react';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeNode, CodeHighlightNode } from '@lexical/code';
 import { LinkNode, AutoLinkNode } from '@lexical/link';
-import { Eye, EyeOff, Save, Wifi, WifiOff, Users, RefreshCw, Clock, History, FileText } from 'lucide-react';
+import { Eye, EyeOff, Save, Wifi, WifiOff, Users, RefreshCw, Clock, History, FileText, Send, Bot, Sparkles } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -377,6 +381,296 @@ interface CollaborativeLexicalEditorProps {
   onContentChange?: (content: string) => void;
   onSave?: (content: string) => Promise<void>;
   onLexicalContentChange?: (lexicalContent: string) => void; // 新增：Lexical格式内容变化回调
+}
+
+// 新增AI助手组件
+function AIAssistant({
+  onInsertContent,
+  documentContent
+}: {
+  onInsertContent: (content: string) => void;
+  documentContent: string;
+}) {
+  const [messages, setMessages] = useState<Array<{role: 'user' | 'assistant', content: string}>>([]);
+  const [inputValue, setInputValue] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // 自动滚动到底部
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // 加载AI模板
+  useEffect(() => {
+    const loadTemplates = async () => {
+      try {
+        const templateData = await apiService.getAITemplates();
+        setTemplates(templateData);
+      } catch (error) {
+        console.error('Failed to load AI templates:', error);
+      }
+    };
+    loadTemplates();
+  }, []);
+
+  // 发送消息到AI
+  const sendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
+
+    const userMessage = inputValue.trim();
+    setInputValue('');
+    setIsLoading(true);
+
+    // 添加用户消息 - 修复类型错误
+    const newMessages = [...messages, { role: 'user' as const, content: userMessage }];
+    setMessages(newMessages);
+
+    try {
+      // 使用apiService调用AI API
+      const response = await apiService.aiAssist({
+        message: userMessage,
+        documentContent: documentContent,
+        conversationHistory: newMessages,
+        templateId: selectedTemplate?.id
+      });
+      
+      // 添加AI回复 - 修复类型错误
+      setMessages([...newMessages, { role: 'assistant' as const, content: response.response }]);
+    } catch (error) {
+      console.error('AI请求失败:', error);
+      setMessages([...newMessages, { 
+        role: 'assistant' as const, 
+        content: '抱歉，AI服务暂时不可用，请稍后再试。' 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 插入AI回复到文档
+  const insertAIResponse = (content: string) => {
+    onInsertContent(content);
+  };
+
+  // 处理回车键发送
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  // 预设的AI提示
+  const presetPrompts = [
+    '帮我优化这段文档的结构',
+    '检查语法和拼写错误',
+    '添加更多细节和例子',
+    '总结文档的主要观点',
+    '转换为更正式的语气'
+  ];
+
+  // 使用模板的函数
+  const useTemplate = (template: any) => {
+    setSelectedTemplate(template);
+    setShowTemplateModal(false);
+    // 如果模板有user_prompt，将其设置为输入值
+    if (template.user_prompt) {
+      setInputValue(template.user_prompt.replace('{document}', documentContent || ''));
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-gray-50 border-l border-gray-200 min-h-0">
+      {/* AI助手头部 */}
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Bot className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-gray-900">AI助手</h3>
+            <Sparkles className="h-4 w-4 text-yellow-500" />
+          </div>
+          <button
+            onClick={() => setShowTemplateModal(true)}
+            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+          >
+            选择模板
+          </button>
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-sm text-gray-600">智能写作助手，帮助您提升文档质量</p>
+          {selectedTemplate && (
+            <div className="flex items-center space-x-1 text-xs text-green-600">
+              <span>●</span>
+              <span>{selectedTemplate.name}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 预设提示 */}
+      <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white">
+        <p className="text-xs text-gray-500 mb-2">快速提示：</p>
+        <div className="flex flex-wrap gap-1">
+          {presetPrompts.map((prompt, index) => (
+            <button
+              key={index}
+              onClick={() => setInputValue(prompt)}
+              className="px-2 py-1 text-xs bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors"
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 消息列表 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        {messages.length === 0 ? (
+          <div className="text-center text-gray-500 py-8">
+            <Bot className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+            <p className="text-sm">开始与AI助手对话，获得写作建议</p>
+          </div>
+        ) : (
+          messages.map((message, index) => (
+            <div
+              key={index}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              <div
+                className={`max-w-[85%] p-3 rounded-lg ${
+                  message.role === 'user'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white border border-gray-200'
+                }`}
+              >
+                <div className="flex items-start space-x-2">
+                  {message.role === 'assistant' && (
+                    <Bot className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  )}
+                  <div className="flex-1">
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    {message.role === 'assistant' && (
+                      <button
+                        onClick={() => insertAIResponse(message.content)}
+                        className="mt-2 text-xs text-blue-600 hover:text-blue-800 underline"
+                      >
+                        插入到文档
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+        
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="bg-white border border-gray-200 p-3 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Bot className="h-4 w-4 text-blue-600" />
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* 输入区域 */}
+      <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-white">
+        <div className="flex space-x-2">
+          <textarea
+            ref={inputRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="向AI助手提问..."
+            className="flex-1 p-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            rows={2}
+            disabled={isLoading}
+          />
+          <button
+            onClick={sendMessage}
+            disabled={!inputValue.trim() || isLoading}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center space-x-1"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          按 Enter 发送，Shift + Enter 换行
+        </p>
+      </div>
+
+      {/* 模板选择模态框 */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">选择AI模板</h3>
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setSelectedTemplate(null);
+                  setShowTemplateModal(false);
+                }}
+                className={`w-full p-3 text-left border rounded-lg transition-colors ${
+                  !selectedTemplate ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="font-medium text-gray-900">通用模式</div>
+                <div className="text-sm text-gray-600">无特定模板，自由对话</div>
+              </button>
+
+              {templates.map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => useTemplate(template)}
+                  className={`w-full p-3 text-left border rounded-lg transition-colors ${
+                    selectedTemplate?.id === template.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-medium text-gray-900">{template.name}</div>
+                  <div className="text-sm text-gray-600 mb-1">{template.description}</div>
+                  <div className="text-xs text-blue-600">{template.category}</div>
+                </button>
+              ))}
+
+              {templates.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>暂无可用模板</p>
+                  <p className="text-sm mt-1">管理员可在后台添加AI模板</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function CollaborativeLexicalEditor({
@@ -800,6 +1094,45 @@ export function CollaborativeLexicalEditor({
     setShowVersionHistory(!showVersionHistory);
   }, [showVersionHistory, loadVersionHistory]);
 
+  // 插入内容到编辑器的函数
+  const insertContentToEditor = useCallback((content: string) => {
+    if (!editorRef.current) return;
+
+    editorRef.current.update(() => {
+      const root = $getRoot();
+      const selection = window.getSelection();
+      
+      if (selection && selection.rangeCount > 0) {
+        // 如果有选中文本，替换选中内容
+        const range = selection.getRangeAt(0);
+        const textNode = $createTextNode(content);
+        // 这里需要更复杂的逻辑来处理选中内容的替换
+        // 简化处理：在末尾添加内容
+        let lastParagraph = root.getLastChild();
+        if (lastParagraph && lastParagraph.getType && lastParagraph.getType() === 'paragraph') {
+          // 如果最后一个节点是段落，则向其添加文本节点
+          (lastParagraph as any).append($createTextNode('\n' + content));
+        } else {
+          // 否则新建一个段落节点并添加到根节点
+          const paragraph = $createParagraphNode();
+          paragraph.append($createTextNode(content));
+          root.append(paragraph);
+        }
+        // 在末尾添加内容
+        const lastChild = root.getLastChild();
+        if (lastChild && lastChild.getType() === 'paragraph') {
+          // 如果最后一个节点是段落，则向其添加文本节点
+          (lastChild as any).append($createTextNode('\n' + content));
+        } else {
+          // 否则新建一个段落节点并添加到根节点
+          const paragraph = $createParagraphNode();
+          paragraph.append($createTextNode(content));
+          root.append(paragraph);
+        }
+      }
+    });
+  }, []);
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-white">
@@ -812,9 +1145,9 @@ export function CollaborativeLexicalEditor({
   }
 
   return (
-    <div className="lexical-editor h-screen flex flex-col bg-white">
+    <div className="lexical-editor h-screen flex flex-col bg-white overflow-hidden">
       {/* 顶部工具栏 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
         {/* 左侧：文档状态 */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -839,7 +1172,6 @@ export function CollaborativeLexicalEditor({
             )}
           </div>
 
-
           {/* 最后同步时间 */}
           {lastSyncTime && (
             <div className="flex items-center space-x-1 text-sm text-gray-500">
@@ -859,8 +1191,6 @@ export function CollaborativeLexicalEditor({
 
         {/* 右侧：操作按钮 */}
         <div className="flex items-center space-x-2">
-          {/* 移除自动功能开关，保持界面简洁 */}
-          
           <button
             onClick={toggleVersionHistory}
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
@@ -869,14 +1199,11 @@ export function CollaborativeLexicalEditor({
             <History className="h-4 w-4" />
             <span>历史</span>
           </button>
-          
-          
-
         </div>
       </div>
 
-      {/* 主要内容区域 */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* 主要内容区域 - 修改为5:1布局 */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 版本历史侧边栏 */}
         {showVersionHistory && (
           <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
@@ -916,16 +1243,17 @@ export function CollaborativeLexicalEditor({
           </div>
         )}
 
-        {/* 主編輯區域 */}
-        <div className="flex-1 flex">
-          {/* 编辑器區域 */}
-          <div className={`${isPreviewMode ? 'w-1/2 border-r border-gray-200' : 'flex-1'} transition-all duration-300`}>
+        {/* 主编辑区域 - 修改宽度比例 */}
+        <div className="flex-1 flex min-h-0">
+          {/* 编辑器区域 - 占5/6宽度 */}
+          <div className={`${isPreviewMode ? 'w-1/2' : 'w-5/6'} transition-all duration-300 flex flex-col min-h-0`}>
             <LexicalComposer initialConfig={initialConfig}>
-              <div className="editor-container h-full">
+              <div className="editor-container flex-1 flex flex-col min-h-0">
+                <FormatToolbar />
                 <RichTextPlugin
                   contentEditable={
                     <ContentEditable 
-                      className="editor-input h-full p-8 outline-none resize-none"
+                      className="editor-input flex-1 p-8 outline-none resize-none overflow-auto"
                       style={{
                         fontSize: '16px',
                         lineHeight: '1.8',
@@ -962,7 +1290,6 @@ export function CollaborativeLexicalEditor({
                     onCollaborativeUpdate={(hasUpdates) => {
                       setHasCollaborativeUpdates(hasUpdates);
                       if (hasUpdates) {
-                        // 3秒后清除指示器
                         setTimeout(() => setHasCollaborativeUpdates(false), 3000);
                       }
                     }}
@@ -978,9 +1305,17 @@ export function CollaborativeLexicalEditor({
             </LexicalComposer>
           </div>
 
-          {/* 实时预览区域 - 只在預覽模式下顯示 */}
+          {/* AI助手区域 - 占1/6宽度 */}
+          <div className="w-1/6 flex flex-col min-h-0">
+            <AIAssistant
+              onInsertContent={insertContentToEditor}
+              documentContent={previewContent}
+            />
+          </div>
+
+          {/* 实时预览区域 - 只在预览模式下显示 */}
           {isPreviewMode && (
-            <div className="w-1/2 overflow-auto bg-gray-50">
+            <div className="w-1/2 overflow-auto bg-gray-50 min-h-0">
               <div className="p-8 prose prose-lg max-w-none bg-white m-4 rounded-lg shadow-sm">
                 <div className="markdown-preview">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -994,7 +1329,7 @@ export function CollaborativeLexicalEditor({
       </div>
 
       {/* 底部状态栏 */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
         <div className="flex items-center space-x-4">
           <span>字符数: {previewContent.length}</span>
           <span>行数: {previewContent.split('\n').length}</span>
@@ -1007,7 +1342,6 @@ export function CollaborativeLexicalEditor({
           <span className={isOnline ? 'text-green-600' : 'text-red-600'}>
             ● {isOnline ? '智能同步已启用' : '离线模式'}
           </span>
-          {/* 详细同步信息 */}
           {documentState && (
             <span className="text-blue-600">版本: v{documentState.version}</span>
           )}
@@ -1022,6 +1356,8 @@ export function CollaborativeLexicalEditor({
           <span>•</span>
           <span>ShareDB 协作</span>
           <span>•</span>
+          <span>AI 助手</span>
+          <span>•</span>
           <span>{isOnline ? '在线' : '离线'}</span>
           
           {hasCollaborativeUpdates && (
@@ -1035,6 +1371,92 @@ export function CollaborativeLexicalEditor({
     </div>
   );
 }
+
+// 格式工具栏组件
+function FormatToolbar() {
+  const [editor] = useLexicalComposerContext();
+  const [formatInfo, setFormatInfo] = useState<string>('普通文本');
+
+  useEffect(() => {
+    const updateFormatInfo = () => {
+      editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        
+        if ($isRangeSelection(selection)) {
+          const node = selection.anchor.getNode();
+          const parent = node.getParent();
+          
+          let formatText = '';
+          
+          // 检查节点类型
+          if (parent) {
+            const parentType = parent.getType();
+            switch (parentType) {
+              case 'heading':
+                const level = (parent as any).getTag();
+                formatText = `${level.toUpperCase()} 标题`;
+                break;
+              case 'quote':
+                formatText = '引用块';
+                break;
+              case 'listitem':
+                const listParent = parent.getParent();
+                if (listParent?.getType() === 'list') {
+                  const listType = (listParent as any).getListType();
+                  formatText = listType === 'bullet' ? '• 无序列表' : '1. 有序列表';
+                }
+                break;
+              case 'code':
+                formatText = '代码块';
+                break;
+              case 'paragraph':
+                // 检查文本格式
+                if (node.getType() === 'text') {
+                  const format = node.getFormat();
+                  const formats = [];
+                  if (format & 1) formats.push('B');
+                  if (format & 2) formats.push('I');
+                  if (format & 4) formats.push('U');
+                  if (format & 8) formats.push('S');
+                  if (format & 16) formats.push('Code');
+                  formatText = formats.length > 0 ? `段落 (${formats.join(' ')})` : '段落';
+                } else {
+                  formatText = '段落';
+                }
+                break;
+              default:
+                formatText = '普通文本';
+            }
+          } else {
+            formatText = '普通文本';
+          }
+          
+          setFormatInfo(formatText);
+        }
+      });
+    };
+
+    const unregisterCommand = editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        updateFormatInfo();
+      });
+    });
+
+    // 初始更新
+    updateFormatInfo();
+
+    return unregisterCommand;
+  }, [editor]);
+
+  return (
+    <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
+      <span className="font-medium">格式: </span>
+      <span className="text-blue-600">{formatInfo}</span>
+    </div>
+  );
+}
+
+
 
 // 用于保存编辑器引用的插件
 function EditorRefPlugin({ onRef }: { onRef: (editor: any) => void }) {

@@ -10,6 +10,7 @@ from .repository_analysis import router as repository_analysis_router
 from .openai_compatible import router as openai_router
 from .sharedb import router as sharedb_router
 from .organizations import router as organizations_router
+from .ai_assist import router as ai_assist_router
 
 router = APIRouter()
 
@@ -30,4 +31,7 @@ router.include_router(sharedb_router, prefix="/sharedb", tags=["sharedb"])
 router.include_router(openai_router, tags=["openai_compatible"])
 
 # 注册组织管理API路由
-router.include_router(organizations_router, prefix="/organizations", tags=["organizations"]) 
+router.include_router(organizations_router, prefix="/organizations", tags=["organizations"])
+
+# 注册AI助手API路由
+router.include_router(ai_assist_router, prefix="/ai", tags=["ai_assist"]) 

@@ -79,6 +79,35 @@ export interface CommitInfo {
   user?: User;
 }
 
+export interface AITemplate {
+  id: number;
+  name: string;
+  description: string;
+  system_prompt: string;
+  user_prompt: string;
+  category: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AITemplateCreate {
+  name: string;
+  description: string;
+  system_prompt: string;
+  user_prompt: string;
+  category: string;
+}
+
+export interface AITemplateUpdate {
+  name?: string;
+  description?: string;
+  system_prompt?: string;
+  user_prompt?: string;
+  category?: string;
+  is_active?: boolean;
+}
+
 export interface CommitAnalytics {
   user_stats: {
     total_commits: number;
@@ -469,10 +498,43 @@ export const monitoringAPI = {
   }
 };
 
+// AI模板管理
+export const aiTemplatesAPI = {
+  // 获取所有AI模板（管理员功能）
+  getAllTemplates: async (): Promise<AITemplate[]> => {
+    const response = await apiClient.get('/api/v1/ai/templates/admin');
+    return response.data;
+  },
+
+  // 获取激活的AI模板
+  getActiveTemplates: async (): Promise<AITemplate[]> => {
+    const response = await apiClient.get('/api/v1/ai/templates');
+    return response.data;
+  },
+
+  // 创建AI模板
+  createTemplate: async (template: AITemplateCreate): Promise<AITemplate> => {
+    const response = await apiClient.post('/api/v1/ai/templates', template);
+    return response.data;
+  },
+
+  // 更新AI模板
+  updateTemplate: async (id: number, updates: AITemplateUpdate): Promise<AITemplate> => {
+    const response = await apiClient.put(`/api/v1/ai/templates/${id}`, updates);
+    return response.data;
+  },
+
+  // 删除AI模板
+  deleteTemplate: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/v1/ai/templates/${id}`);
+  }
+};
+
 export default {
   authAPI,
   usersAPI,
   commitsAPI,
   systemAPI,
-  monitoringAPI
+  monitoringAPI,
+  aiTemplatesAPI
 }; 
