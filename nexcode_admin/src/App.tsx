@@ -6,6 +6,7 @@ import AdminLayout from './components/AdminLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
+import AITemplates from './pages/AITemplates';
 import CommitHistory from './pages/CommitHistory';
 import APIMonitor from './pages/APIMonitor';
 import SystemSettings from './pages/SystemSettings';
@@ -44,6 +45,7 @@ const AppContent: React.FC = () => {
                   <Routes>
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="users" element={<UserManagement />} />
+                    <Route path="ai-templates" element={<AITemplates />} />
                     <Route path="commits" element={<CommitHistory />} />
                     <Route path="api-monitor" element={<APIMonitor />} />
                     <Route path="settings" element={<SystemSettings />} />

@@ -20,7 +20,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   MoonOutlined,
-  SunOutlined
+  SunOutlined,
+  RobotOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -48,6 +49,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
       key: '/admin/users',
       icon: <UserOutlined />,
       label: '用户管理',
+    },
+    {
+      key: '/admin/ai-templates',
+      icon: <RobotOutlined />,
+      label: 'AI模板管理',
     },
     {
       key: '/admin/commits',

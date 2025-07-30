@@ -275,3 +275,35 @@ export interface UserSearchResult {
   email: string;
   full_name: string | null;
 } 
+
+// AI模板相关类型
+export interface AITemplate {
+  id: number;
+  name: string;
+  description: string;
+  system_prompt: string;
+  user_prompt: string;
+  category: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AITemplateCreateRequest {
+  name: string;
+  description: string;
+  system_prompt: string;
+  user_prompt: string;
+  category: string;
+}
+
+export interface AITemplateUpdateRequest extends Partial<AITemplateCreateRequest> {
+  is_active?: boolean;
+}
+
+export interface AIAssistRequest {
+  message: string;
+  documentContent: string;
+  conversationHistory: Array<{role: 'user' | 'assistant', content: string}>;
+  templateId?: number;
+} 

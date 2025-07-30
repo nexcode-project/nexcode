@@ -23,6 +23,11 @@ import type {
   ChatCompletionResponse,
   CodeAnalysisRequest,
   CommitMessageRequest,
+  // AI模板相关
+  AITemplate,
+  AITemplateCreateRequest,
+  AITemplateUpdateRequest,
+  AIAssistRequest,
   // 通用類型
   ApiResponse
 } from '@/types/api';
@@ -322,20 +327,32 @@ class ApiService {
     return response.data;
   }
 
+  // ===================== AI 相關方法 =====================
+  
   /**
-   * 生成提交信息
+   * OpenAI 兼容的聊天完成
    */
-  async generateCommitMessage(data: CommitMessageRequest): Promise<{ message: string }> {
-    const response = await this.client.post<{ message: string }>('/v1/commit-message', data);
-    return response.data;
+  async getChatCompletion(request: ChatCompletionRequest): Promise<ChatCompletionResponse> {
+    try {
+      const response = await this.client.post<ChatCompletionResponse>('/v1/openai_compatible/chat/completions', request);
+      return response.data;
+    } catch (error) {
+      console.error('Chat completion failed:', error);
+      throw error;
+    }
   }
 
   /**
    * 代碼質量分析
    */
-  async analyzeCodeQuality(data: CodeAnalysisRequest): Promise<any> {
-    const response = await this.client.post('/v1/code-quality', data);
-    return response.data;
+  async analyzeCode(request: CodeAnalysisRequest): Promise<{ analysis: string }> {
+    try {
+      const response = await this.client.post<{ analysis: string }>('/v1/code_quality/', request);
+      return response.data;
+    } catch (error) {
+      console.error('Code analysis failed:', error);
+      throw error;
+    }
   }
 
   /**
@@ -344,6 +361,70 @@ class ApiService {
   async reviewCode(data: CodeAnalysisRequest): Promise<any> {
     const response = await this.client.post('/v1/code-review', data);
     return response.data;
+  }
+
+  /**
+   * 生成提交信息
+   */
+  async generateCommitMessage(request: CommitMessageRequest): Promise<{ message: string }> {
+    try {
+      const response = await this.client.post<{ message: string }>('/v1/commit_message/', request);
+      return response.data;
+    } catch (error) {
+      console.error('Commit message generation failed:', error);
+      throw error;
+    }
+  }
+
+  // AI模板管理方法
+  async getAITemplates(): Promise<AITemplate[]> {
+    try {
+      const response = await this.client.get<AITemplate[]>('/v1/ai/templates');
+      return response.data;
+    } catch (error) {
+      console.error('Failed to get AI templates:', error);
+      throw error;
+    }
+  }
+
+  async createAITemplate(template: AITemplateCreateRequest): Promise<AITemplate> {
+    try {
+      const response = await this.client.post<AITemplate>('/v1/ai/templates', template);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to create AI template:', error);
+      throw error;
+    }
+  }
+
+  async updateAITemplate(id: number, updates: AITemplateUpdateRequest): Promise<AITemplate> {
+    try {
+      const response = await this.client.put<AITemplate>(`/v1/ai/templates/${id}`, updates);
+      return response.data;
+    } catch (error) {
+      console.error('Failed to update AI template:', error);
+      throw error;
+    }
+  }
+
+  async deleteAITemplate(id: number): Promise<void> {
+    try {
+      await this.client.delete(`/v1/ai/templates/${id}`);
+    } catch (error) {
+      console.error('Failed to delete AI template:', error);
+      throw error;
+    }
+  }
+
+  // AI辅助功能
+  async aiAssist(request: AIAssistRequest): Promise<{ response: string }> {
+    try {
+      const response = await this.client.post<{ response: string }>('/v1/ai/assist', request);
+      return response.data;
+    } catch (error) {
+      console.error('AI assist failed:', error);
+      throw error;
+    }
   }
 
   // ===================== 工具方法 =====================
