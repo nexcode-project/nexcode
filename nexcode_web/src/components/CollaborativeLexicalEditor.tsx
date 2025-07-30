@@ -485,9 +485,9 @@ function AIAssistant({
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 border-l border-gray-200">
+    <div className="h-full flex flex-col bg-gray-50 border-l border-gray-200 min-h-0">
       {/* AI助手头部 */}
-      <div className="p-4 border-b border-gray-200 bg-white">
+      <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Bot className="h-5 w-5 text-blue-600" />
@@ -513,7 +513,7 @@ function AIAssistant({
       </div>
 
       {/* 预设提示 */}
-      <div className="p-3 border-b border-gray-200 bg-white">
+      <div className="flex-shrink-0 p-3 border-b border-gray-200 bg-white">
         <p className="text-xs text-gray-500 mb-2">快速提示：</p>
         <div className="flex flex-wrap gap-1">
           {presetPrompts.map((prompt, index) => (
@@ -529,7 +529,7 @@ function AIAssistant({
       </div>
 
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
             <Bot className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -588,7 +588,7 @@ function AIAssistant({
       </div>
 
       {/* 输入区域 */}
-      <div className="p-4 border-t border-gray-200 bg-white">
+      <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-white">
         <div className="flex space-x-2">
           <textarea
             ref={inputRef}
@@ -1141,9 +1141,9 @@ export function CollaborativeLexicalEditor({
   }
 
   return (
-    <div className="lexical-editor h-screen flex flex-col bg-white">
+    <div className="lexical-editor h-screen flex flex-col bg-white overflow-hidden">
       {/* 顶部工具栏 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
         {/* 左侧：文档状态 */}
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
@@ -1199,7 +1199,7 @@ export function CollaborativeLexicalEditor({
       </div>
 
       {/* 主要内容区域 - 修改为5:1布局 */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 版本历史侧边栏 */}
         {showVersionHistory && (
           <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
@@ -1240,15 +1240,15 @@ export function CollaborativeLexicalEditor({
         )}
 
         {/* 主编辑区域 - 修改宽度比例 */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-h-0">
           {/* 编辑器区域 - 占5/6宽度 */}
-          <div className={`${isPreviewMode ? 'w-1/2' : 'w-5/6'} transition-all duration-300`}>
+          <div className={`${isPreviewMode ? 'w-1/2' : 'w-5/6'} transition-all duration-300 flex flex-col min-h-0`}>
             <LexicalComposer initialConfig={initialConfig}>
-              <div className="editor-container h-full">
+              <div className="editor-container flex-1 flex flex-col min-h-0">
                 <RichTextPlugin
                   contentEditable={
                     <ContentEditable 
-                      className="editor-input h-full p-8 outline-none resize-none"
+                      className="editor-input flex-1 p-8 outline-none resize-none overflow-auto"
                       style={{
                         fontSize: '16px',
                         lineHeight: '1.8',
@@ -1301,7 +1301,7 @@ export function CollaborativeLexicalEditor({
           </div>
 
           {/* AI助手区域 - 占1/6宽度 */}
-          <div className="w-1/6">
+          <div className="w-1/6 flex flex-col min-h-0">
             <AIAssistant
               onInsertContent={insertContentToEditor}
               documentContent={previewContent}
@@ -1310,7 +1310,7 @@ export function CollaborativeLexicalEditor({
 
           {/* 实时预览区域 - 只在预览模式下显示 */}
           {isPreviewMode && (
-            <div className="w-1/2 overflow-auto bg-gray-50">
+            <div className="w-1/2 overflow-auto bg-gray-50 min-h-0">
               <div className="p-8 prose prose-lg max-w-none bg-white m-4 rounded-lg shadow-sm">
                 <div className="markdown-preview">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -1324,7 +1324,7 @@ export function CollaborativeLexicalEditor({
       </div>
 
       {/* 底部状态栏 */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
         <div className="flex items-center space-x-4">
           <span>字符数: {previewContent.length}</span>
           <span>行数: {previewContent.split('\n').length}</span>
