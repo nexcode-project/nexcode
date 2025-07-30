@@ -8,9 +8,8 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
 import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND, SELECTION_CHANGE_COMMAND } from 'lexical';
-import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
-import { $createHeadingNode } from '@lexical/rich-text';
-import { $createQuoteNode } from '@lexical/rich-text';
+import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from '@lexical/selection';
+import { $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
 import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X } from 'lucide-react';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
@@ -1536,15 +1535,7 @@ function FloatingFormatToolbar() {
     editor.update(() => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
-        const nodes = selection.getNodes();
-        nodes.forEach((node) => {
-          const parent = node.getParent();
-          if (parent && parent.getType() === 'paragraph') {
-            const heading = $createHeadingNode(`h${level}` as any);
-            heading.append(...parent.getChildren());
-            parent.replace(heading);
-          }
-        });
+        $setBlocksType(selection, () => $createHeadingNode(`h${level}` as any));
       }
     });
     setIsVisible(false);
@@ -1554,15 +1545,7 @@ function FloatingFormatToolbar() {
     editor.update(() => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
-        const nodes = selection.getNodes();
-        nodes.forEach((node) => {
-          const parent = node.getParent();
-          if (parent && parent.getType() === 'paragraph') {
-            const quote = $createQuoteNode();
-            quote.append(...parent.getChildren());
-            parent.replace(quote);
-          }
-        });
+        $setBlocksType(selection, () => $createQuoteNode());
       }
     });
     setIsVisible(false);
@@ -1572,15 +1555,7 @@ function FloatingFormatToolbar() {
     editor.update(() => {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) {
-        const nodes = selection.getNodes();
-        nodes.forEach((node) => {
-          const parent = node.getParent();
-          if (parent && (parent.getType() === 'heading' || parent.getType() === 'quote')) {
-            const paragraph = $createParagraphNode();
-            paragraph.append(...parent.getChildren());
-            parent.replace(paragraph);
-          }
-        });
+        $setBlocksType(selection, () => $createParagraphNode());
       }
     });
     setIsVisible(false);
