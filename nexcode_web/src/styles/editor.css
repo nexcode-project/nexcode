@@ -47,6 +47,26 @@
 /* 段落样式 */
 .editor-paragraph {
   margin: 0 0 1em 0;
+  padding: 0.25rem 0;
+  min-height: 1.5em;
+  position: relative;
+}
+
+/* 段落悬停效果 - 帮助用户识别块边界 */
+.editor-paragraph:hover {
+  background-color: rgba(59, 130, 246, 0.02);
+  border-radius: 4px;
+}
+
+/* 空段落的最小高度 */
+.editor-paragraph:empty {
+  min-height: 1.5em;
+}
+
+/* 段落焦点状态 */
+.editor-paragraph:focus-within {
+  background-color: rgba(59, 130, 246, 0.03);
+  border-radius: 4px;
 }
 
 /* 标题样式 */
@@ -56,6 +76,13 @@
   margin: 0.5em 0;
   color: #111827;
   line-height: 1.2;
+  padding: 0.25rem 0;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.editor-heading-h1:hover {
+  background-color: rgba(59, 130, 246, 0.02);
 }
 
 .editor-heading-h2 {
@@ -64,6 +91,13 @@
   margin: 0.5em 0;
   color: #111827;
   line-height: 1.3;
+  padding: 0.25rem 0;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.editor-heading-h2:hover {
+  background-color: rgba(59, 130, 246, 0.02);
 }
 
 .editor-heading-h3 {
@@ -72,6 +106,13 @@
   margin: 0.5em 0;
   color: #111827;
   line-height: 1.4;
+  padding: 0.25rem 0;
+  border-radius: 4px;
+  transition: background-color 0.15s ease;
+}
+
+.editor-heading-h3:hover {
+  background-color: rgba(59, 130, 246, 0.02);
 }
 
 .editor-heading-h4 {
@@ -106,6 +147,13 @@
   background: #f9fafb;
   font-style: italic;
   color: #6b7280;
+  border-radius: 0 4px 4px 0;
+  transition: background-color 0.15s ease, border-left-color 0.15s ease;
+}
+
+.editor-quote:hover {
+  background: #f3f4f6;
+  border-left-color: #3b82f6;
 }
 
 /* 列表样式 */
