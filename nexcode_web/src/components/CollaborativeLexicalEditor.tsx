@@ -1461,6 +1461,7 @@ function FloatingFormatToolbar() {
   const [editor] = useLexicalComposerContext();
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isBelow, setIsBelow] = useState(false); // 工具栏是否显示在选择下方
   const [formatState, setFormatState] = useState({
     isBold: false,
     isItalic: false,
@@ -1486,10 +1487,33 @@ function FloatingFormatToolbar() {
       if (domSelection && domSelection.rangeCount > 0) {
         const rect = domSelection.getRangeAt(0).getBoundingClientRect();
         if (rect.width > 0 && rect.height > 0) {
-          setPosition({
-            x: rect.left + rect.width / 2,
-            y: rect.top - 10
-          });
+          // 计算工具栏的宽度（大约 300px）
+          const toolbarWidth = 300;
+          const toolbarHeight = 45;
+          
+          // 计算居中位置
+          let x = rect.left + rect.width / 2;
+          let y = rect.top - 10;
+          
+          // 确保工具栏不超出左边界
+          if (x - toolbarWidth / 2 < 10) {
+            x = toolbarWidth / 2 + 10;
+          }
+          
+          // 确保工具栏不超出右边界
+          if (x + toolbarWidth / 2 > window.innerWidth - 10) {
+            x = window.innerWidth - toolbarWidth / 2 - 10;
+          }
+          
+          // 确保工具栏不超出上边界
+          let showBelow = false;
+          if (y - toolbarHeight < 10) {
+            y = rect.bottom + 10; // 如果上方空间不够，显示在下方
+            showBelow = true;
+          }
+          
+          setPosition({ x, y });
+          setIsBelow(showBelow);
           setIsVisible(true);
         }
       }
@@ -1567,9 +1591,10 @@ function FloatingFormatToolbar() {
     <div
       className="fixed z-50 flex items-center bg-gray-800 text-white rounded-lg shadow-lg px-2 py-1 space-x-1"
       style={{
-        left: position.x - 150, // 居中显示
+        left: position.x,
         top: position.y - 45,
         transform: 'translateX(-50%)',
+        maxWidth: '300px',
       }}
     >
       {/* 文本格式按钮 */}
@@ -1668,9 +1693,15 @@ function FloatingFormatToolbar() {
       </button>
 
       {/* 小三角形指向选中文本 */}
-      <div
-        className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"
-      ></div>
+      {isBelow ? (
+        <div
+          className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-gray-800"
+        ></div>
+      ) : (
+        <div
+          className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"
+        ></div>
+      )}
     </div>
   );
 }
