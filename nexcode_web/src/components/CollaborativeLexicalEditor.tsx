@@ -8,10 +8,11 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
 import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND, SELECTION_CHANGE_COMMAND } from 'lexical';
+import { $createListItemNode } from '@lexical/list';
 import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from '@lexical/selection';
 import { $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
 import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X, List, ChevronRight, ChevronDown } from 'lucide-react';
-import { KEY_ENTER_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
+import { KEY_ENTER_COMMAND, KEY_BACKSPACE_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeNode, CodeHighlightNode } from '@lexical/code';
@@ -1853,12 +1854,13 @@ function TableOfContents({
   );
 }
 
-// 回车键处理插件 - 确保每次回车都创建新的段落块
+// 回车键和退格键处理插件
 function EnterKeyPlugin() {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
-    return editor.registerCommand(
+    // 处理回车键
+    const enterUnregister = editor.registerCommand(
       KEY_ENTER_COMMAND,
       (event) => {
         const selection = $getSelection();
@@ -1926,6 +1928,34 @@ function EnterKeyPlugin() {
             
             return true;
           }
+          
+          // 处理列表项的回车行为
+          if (parentNode && parentNode.getType() === 'listitem') {
+            event?.preventDefault();
+            
+            const anchorNode = selection.anchor.getNode();
+            const offset = selection.anchor.offset;
+            
+            // 检查是否在列表项的开头
+            if (anchorNode.getType() === 'text') {
+              const textContent = anchorNode.getTextContent();
+              
+              // 如果光标在开头，删除列表项并创建段落
+              if (offset === 0) {
+                const newParagraph = $createParagraphNode();
+                if (textContent.trim()) {
+                  const newTextNode = $createTextNode(textContent);
+                  newParagraph.append(newTextNode);
+                }
+                parentNode.replace(newParagraph);
+                newParagraph.select();
+                return true;
+              }
+            }
+            
+            // 其他情况让默认行为处理（创建新的列表项）
+            return false;
+          }
         }
         
         // 对于普通段落，让默认行为处理（会自动创建新段落）
@@ -1933,6 +1963,54 @@ function EnterKeyPlugin() {
       },
       COMMAND_PRIORITY_LOW
     );
+
+    // 处理退格键
+    const backspaceUnregister = editor.registerCommand(
+      KEY_BACKSPACE_COMMAND,
+      (event) => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const anchorNode = selection.anchor.getNode();
+          let parentNode = anchorNode.getParent();
+          
+          // 查找块级父节点
+          while (parentNode && !['paragraph', 'heading', 'quote', 'listitem'].includes(parentNode.getType())) {
+            const grandParent = parentNode.getParent();
+            if (grandParent) {
+              parentNode = grandParent;
+            } else {
+              break;
+            }
+          }
+
+          // 处理列表项的空内容退格
+          if (parentNode && parentNode.getType() === 'listitem') {
+            const textContent = parentNode.getTextContent();
+            
+            // 检查是否在列表项的开头，且列表项为空或只有空白字符
+            if (selection.anchor.offset === 0 && (!textContent || !textContent.trim())) {
+              event?.preventDefault();
+              
+              // 将空列表项转换为段落
+              const newParagraph = $createParagraphNode();
+              parentNode.replace(newParagraph);
+              newParagraph.select();
+              
+              return true;
+            }
+          }
+        }
+        
+        // 其他情况让默认行为处理
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    );
+
+    return () => {
+      enterUnregister();
+      backspaceUnregister();
+    };
   }, [editor]);
 
   return null;
