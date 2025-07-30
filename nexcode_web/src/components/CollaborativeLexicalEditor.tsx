@@ -1271,6 +1271,7 @@ export function CollaborativeLexicalEditor({
                 <OnChangePlugin onChange={handleContentChange} />
                 <HistoryPlugin />
                 <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+                <FloatingFormatToolbar />
                 
                 {/* 统一的智能同步插件 */}
                 {sharedbClientRef.current && (
@@ -1456,7 +1457,248 @@ function FormatToolbar() {
   );
 }
 
+// 浮动格式工具栏组件
+function FloatingFormatToolbar() {
+  const [editor] = useLexicalComposerContext();
+  const [isVisible, setIsVisible] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [formatState, setFormatState] = useState({
+    isBold: false,
+    isItalic: false,
+    isUnderline: false,
+    isStrikethrough: false,
+    isCode: false,
+  });
 
+  const updateToolbar = useCallback(() => {
+    const selection = $getSelection();
+    
+    if (!$isRangeSelection(selection) || selection.isCollapsed()) {
+      setIsVisible(false);
+      return;
+    }
+
+    // 获取选中文本的格式状态
+    const anchorNode = selection.anchor.getNode();
+    const element = editor.getElementByKey(anchorNode.getKey());
+    
+    if (element) {
+      const domSelection = window.getSelection();
+      if (domSelection && domSelection.rangeCount > 0) {
+        const rect = domSelection.getRangeAt(0).getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          setPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10
+          });
+          setIsVisible(true);
+        }
+      }
+    }
+
+    // 更新格式状态
+    setFormatState({
+      isBold: selection.hasFormat('bold'),
+      isItalic: selection.hasFormat('italic'),
+      isUnderline: selection.hasFormat('underline'),
+      isStrikethrough: selection.hasFormat('strikethrough'),
+      isCode: selection.hasFormat('code'),
+    });
+  }, [editor]);
+
+  useEffect(() => {
+    const updateListener = editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        updateToolbar();
+      });
+    });
+
+    const selectionListener = editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        updateToolbar();
+        return false;
+      },
+      1
+    );
+
+    return () => {
+      updateListener();
+      selectionListener();
+    };
+  }, [editor, updateToolbar]);
+
+  const toggleFormat = (format: 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code') => {
+    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+  };
+
+  const convertToHeading = (level: number) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const nodes = selection.getNodes();
+        nodes.forEach((node) => {
+          const parent = node.getParent();
+          if (parent && parent.getType() === 'paragraph') {
+            const heading = $createHeadingNode(`h${level}` as any);
+            heading.append(...parent.getChildren());
+            parent.replace(heading);
+          }
+        });
+      }
+    });
+    setIsVisible(false);
+  };
+
+  const convertToQuote = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const nodes = selection.getNodes();
+        nodes.forEach((node) => {
+          const parent = node.getParent();
+          if (parent && parent.getType() === 'paragraph') {
+            const quote = $createQuoteNode();
+            quote.append(...parent.getChildren());
+            parent.replace(quote);
+          }
+        });
+      }
+    });
+    setIsVisible(false);
+  };
+
+  const convertToParagraph = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        const nodes = selection.getNodes();
+        nodes.forEach((node) => {
+          const parent = node.getParent();
+          if (parent && (parent.getType() === 'heading' || parent.getType() === 'quote')) {
+            const paragraph = $createParagraphNode();
+            paragraph.append(...parent.getChildren());
+            parent.replace(paragraph);
+          }
+        });
+      }
+    });
+    setIsVisible(false);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div
+      className="fixed z-50 flex items-center bg-gray-800 text-white rounded-lg shadow-lg px-2 py-1 space-x-1"
+      style={{
+        left: position.x - 150, // 居中显示
+        top: position.y - 45,
+        transform: 'translateX(-50%)',
+      }}
+    >
+      {/* 文本格式按钮 */}
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isBold ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('bold')}
+        title="粗体 (Ctrl+B)"
+      >
+        <Bold className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isItalic ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('italic')}
+        title="斜体 (Ctrl+I)"
+      >
+        <Italic className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isUnderline ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('underline')}
+        title="下划线 (Ctrl+U)"
+      >
+        <Underline className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isStrikethrough ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('strikethrough')}
+        title="删除线"
+      >
+        <Strikethrough className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isCode ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('code')}
+        title="行内代码"
+      >
+        <Code className="h-4 w-4" />
+      </button>
+
+      {/* 分隔线 */}
+      <div className="w-px h-6 bg-gray-600 mx-1"></div>
+
+      {/* 块级格式按钮 */}
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={convertToParagraph}
+        title="普通段落"
+      >
+        <Type className="h-4 w-4" />
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={() => convertToHeading(1)}
+        title="一级标题"
+      >
+        <span className="text-xs font-bold">H1</span>
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={() => convertToHeading(2)}
+        title="二级标题"
+      >
+        <span className="text-xs font-bold">H2</span>
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={() => convertToHeading(3)}
+        title="三级标题"
+      >
+        <span className="text-xs font-bold">H3</span>
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={convertToQuote}
+        title="引用块"
+      >
+        <Quote className="h-4 w-4" />
+      </button>
+
+      {/* 关闭按钮 */}
+      <div className="w-px h-6 bg-gray-600 mx-1"></div>
+      <button
+        className="p-1.5 rounded hover:bg-gray-700 text-gray-400"
+        onClick={() => setIsVisible(false)}
+        title="关闭"
+      >
+        <X className="h-3 w-3" />
+      </button>
+
+      {/* 小三角形指向选中文本 */}
+      <div
+        className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"
+      ></div>
+    </div>
+  );
+}
 
 // 用于保存编辑器引用的插件
 function EditorRefPlugin({ onRef }: { onRef: (editor: any) => void }) {
