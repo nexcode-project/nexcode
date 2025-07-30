@@ -1312,8 +1312,8 @@ export function CollaborativeLexicalEditor({
                     <ContentEditable 
                       className="editor-input flex-1 p-8 outline-none resize-none overflow-auto"
                       style={{
-                        fontSize: '16px',
-                        lineHeight: '1.8',
+                        fontSize: '14px',
+                        lineHeight: '1.4',
                         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                       }}
                     />
