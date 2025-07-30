@@ -8,10 +8,9 @@ import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
 import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND, SELECTION_CHANGE_COMMAND } from 'lexical';
-import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
-import { $createHeadingNode } from '@lexical/rich-text';
-import { $createQuoteNode } from '@lexical/rich-text';
-import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X } from 'lucide-react';
+import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from '@lexical/selection';
+import { $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
+import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X, List, ChevronRight, ChevronDown } from 'lucide-react';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeNode, CodeHighlightNode } from '@lexical/code';
@@ -693,6 +692,8 @@ export function CollaborativeLexicalEditor({
   const [versionHistory, setVersionHistory] = useState<DocumentVersion[]>([]);
   const [hasCollaborativeUpdates, setHasCollaborativeUpdates] = useState(false); // 协作更新指示
   const [previewContent, setPreviewContent] = useState(''); // 用于预览的可读文本内容
+  const [showTOC, setShowTOC] = useState(true); // 显示目录
+  const [tocItems, setTocItems] = useState<Array<{id: string, text: string, level: number}>>([]);
   
   // 移除不再需要的状态
   // const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
@@ -1094,6 +1095,36 @@ export function CollaborativeLexicalEditor({
     setShowVersionHistory(!showVersionHistory);
   }, [showVersionHistory, loadVersionHistory]);
 
+  // 更新目录
+  const handleTOCUpdate = useCallback((items: Array<{id: string, text: string, level: number}>) => {
+    setTocItems(items);
+  }, []);
+
+  // 跳转到标题
+  const handleTOCItemClick = useCallback((headingKey: string) => {
+    if (!editorRef.current) return;
+    
+    editorRef.current.update(() => {
+      const root = $getRoot();
+      
+      // 直接在根节点的子节点中查找目标节点
+      const children = root.getChildren();
+      const targetNode = children.find((node: any) => node.getKey() === headingKey);
+      if (targetNode) {
+        // 创建选择范围并选中标题
+        targetNode.selectStart();
+        
+        // 滚动到目标元素
+        setTimeout(() => {
+          const element = editorRef.current.getElementByKey(headingKey);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }, 50);
+      }
+    });
+  }, []);
+
   // 插入内容到编辑器的函数
   const insertContentToEditor = useCallback((content: string) => {
     if (!editorRef.current) return;
@@ -1192,6 +1223,19 @@ export function CollaborativeLexicalEditor({
         {/* 右侧：操作按钮 */}
         <div className="flex items-center space-x-2">
           <button
+            onClick={() => setShowTOC(!showTOC)}
+            className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              showTOC 
+                ? 'text-blue-700 bg-blue-100 hover:bg-blue-200' 
+                : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+            }`}
+            title="目录"
+          >
+            <List className="h-4 w-4" />
+            <span>目录</span>
+          </button>
+          
+          <button
             onClick={toggleVersionHistory}
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
             title="版本历史"
@@ -1202,8 +1246,23 @@ export function CollaborativeLexicalEditor({
         </div>
       </div>
 
-      {/* 主要内容区域 - 修改为5:1布局 */}
+      {/* 主要内容区域 */}
       <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* 目录侧边栏 */}
+        {showTOC && (
+          <div className="w-1/5 border-r border-gray-200 bg-gray-50 flex flex-col">
+            <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
+              <h3 className="text-lg font-semibold text-gray-900">目录</h3>
+            </div>
+            <div className="flex-1 overflow-auto">
+              <TableOfContents 
+                items={tocItems} 
+                onItemClick={handleTOCItemClick}
+              />
+            </div>
+          </div>
+        )}
+
         {/* 版本历史侧边栏 */}
         {showVersionHistory && (
           <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
@@ -1243,10 +1302,10 @@ export function CollaborativeLexicalEditor({
           </div>
         )}
 
-        {/* 主编辑区域 - 修改宽度比例 */}
+        {/* 主编辑区域 */}
         <div className="flex-1 flex min-h-0">
-          {/* 编辑器区域 - 占5/6宽度 */}
-          <div className={`${isPreviewMode ? 'w-1/2' : 'w-5/6'} transition-all duration-300 flex flex-col min-h-0`}>
+          {/* 编辑器区域 */}
+          <div className={`${isPreviewMode ? 'w-1/2' : showTOC ? 'w-4/5' : 'w-5/6'} transition-all duration-300 flex flex-col min-h-0`}>
             <LexicalComposer initialConfig={initialConfig}>
               <div className="editor-container flex-1 flex flex-col min-h-0">
                 <FormatToolbar />
@@ -1271,6 +1330,8 @@ export function CollaborativeLexicalEditor({
                 <OnChangePlugin onChange={handleContentChange} />
                 <HistoryPlugin />
                 <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+                <FloatingFormatToolbar />
+                <TOCPlugin onTOCUpdate={handleTOCUpdate} />
                 
                 {/* 统一的智能同步插件 */}
                 {sharedbClientRef.current && (
@@ -1305,8 +1366,8 @@ export function CollaborativeLexicalEditor({
             </LexicalComposer>
           </div>
 
-          {/* AI助手区域 - 占1/6宽度 */}
-          <div className="w-1/6 flex flex-col min-h-0">
+          {/* AI助手区域 */}
+          <div className={`${showTOC ? 'w-1/5' : 'w-1/6'} flex flex-col min-h-0`}>
             <AIAssistant
               onInsertContent={insertContentToEditor}
               documentContent={previewContent}
@@ -1456,7 +1517,347 @@ function FormatToolbar() {
   );
 }
 
+// 浮动格式工具栏组件
+function FloatingFormatToolbar() {
+  const [editor] = useLexicalComposerContext();
+  const [isVisible, setIsVisible] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isBelow, setIsBelow] = useState(false); // 工具栏是否显示在选择下方
+  const [formatState, setFormatState] = useState({
+    isBold: false,
+    isItalic: false,
+    isUnderline: false,
+    isStrikethrough: false,
+    isCode: false,
+  });
 
+  const updateToolbar = useCallback(() => {
+    const selection = $getSelection();
+    
+    if (!$isRangeSelection(selection) || selection.isCollapsed()) {
+      setIsVisible(false);
+      return;
+    }
+
+    // 获取选中文本的格式状态
+    const anchorNode = selection.anchor.getNode();
+    const element = editor.getElementByKey(anchorNode.getKey());
+    
+    if (element) {
+      const domSelection = window.getSelection();
+      if (domSelection && domSelection.rangeCount > 0) {
+        const rect = domSelection.getRangeAt(0).getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          // 计算工具栏的宽度（大约 300px）
+          const toolbarWidth = 300;
+          const toolbarHeight = 45;
+          
+          // 计算居中位置
+          let x = rect.left + rect.width / 2;
+          let y = rect.top - 10;
+          
+          // 确保工具栏不超出左边界
+          if (x - toolbarWidth / 2 < 10) {
+            x = toolbarWidth / 2 + 10;
+          }
+          
+          // 确保工具栏不超出右边界
+          if (x + toolbarWidth / 2 > window.innerWidth - 10) {
+            x = window.innerWidth - toolbarWidth / 2 - 10;
+          }
+          
+          // 确保工具栏不超出上边界
+          let showBelow = false;
+          if (y - toolbarHeight < 10) {
+            y = rect.bottom + 10; // 如果上方空间不够，显示在下方
+            showBelow = true;
+          }
+          
+          setPosition({ x, y });
+          setIsBelow(showBelow);
+          setIsVisible(true);
+        }
+      }
+    }
+
+    // 更新格式状态
+    setFormatState({
+      isBold: selection.hasFormat('bold'),
+      isItalic: selection.hasFormat('italic'),
+      isUnderline: selection.hasFormat('underline'),
+      isStrikethrough: selection.hasFormat('strikethrough'),
+      isCode: selection.hasFormat('code'),
+    });
+  }, [editor]);
+
+  useEffect(() => {
+    const updateListener = editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        updateToolbar();
+      });
+    });
+
+    const selectionListener = editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        updateToolbar();
+        return false;
+      },
+      1
+    );
+
+    return () => {
+      updateListener();
+      selectionListener();
+    };
+  }, [editor, updateToolbar]);
+
+  const toggleFormat = (format: 'bold' | 'italic' | 'underline' | 'strikethrough' | 'code') => {
+    editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+  };
+
+  const convertToHeading = (level: number) => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        $setBlocksType(selection, () => $createHeadingNode(`h${level}` as any));
+      }
+    });
+    setIsVisible(false);
+  };
+
+  const convertToQuote = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        $setBlocksType(selection, () => $createQuoteNode());
+      }
+    });
+    setIsVisible(false);
+  };
+
+  const convertToParagraph = () => {
+    editor.update(() => {
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        $setBlocksType(selection, () => $createParagraphNode());
+      }
+    });
+    setIsVisible(false);
+  };
+
+  if (!isVisible) return null;
+
+  return (
+    <div
+      className="fixed z-50 flex items-center bg-gray-800 text-white rounded-lg shadow-lg px-2 py-1 space-x-1"
+      style={{
+        left: position.x,
+        top: position.y - 45,
+        transform: 'translateX(-50%)',
+        maxWidth: '300px',
+      }}
+    >
+      {/* 文本格式按钮 */}
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isBold ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('bold')}
+        title="粗体 (Ctrl+B)"
+      >
+        <Bold className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isItalic ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('italic')}
+        title="斜体 (Ctrl+I)"
+      >
+        <Italic className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isUnderline ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('underline')}
+        title="下划线 (Ctrl+U)"
+      >
+        <Underline className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isStrikethrough ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('strikethrough')}
+        title="删除线"
+      >
+        <Strikethrough className="h-4 w-4" />
+      </button>
+
+      <button
+        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isCode ? 'bg-gray-600' : ''}`}
+        onClick={() => toggleFormat('code')}
+        title="行内代码"
+      >
+        <Code className="h-4 w-4" />
+      </button>
+
+      {/* 分隔线 */}
+      <div className="w-px h-6 bg-gray-600 mx-1"></div>
+
+      {/* 块级格式按钮 */}
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={convertToParagraph}
+        title="普通段落"
+      >
+        <Type className="h-4 w-4" />
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={() => convertToHeading(1)}
+        title="一级标题"
+      >
+        <span className="text-xs font-bold">H1</span>
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={() => convertToHeading(2)}
+        title="二级标题"
+      >
+        <span className="text-xs font-bold">H2</span>
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={() => convertToHeading(3)}
+        title="三级标题"
+      >
+        <span className="text-xs font-bold">H3</span>
+      </button>
+
+      <button
+        className="p-1.5 rounded hover:bg-gray-700"
+        onClick={convertToQuote}
+        title="引用块"
+      >
+        <Quote className="h-4 w-4" />
+      </button>
+
+      {/* 关闭按钮 */}
+      <div className="w-px h-6 bg-gray-600 mx-1"></div>
+      <button
+        className="p-1.5 rounded hover:bg-gray-700 text-gray-400"
+        onClick={() => setIsVisible(false)}
+        title="关闭"
+      >
+        <X className="h-3 w-3" />
+      </button>
+
+      {/* 小三角形指向选中文本 */}
+      {isBelow ? (
+        <div
+          className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-b-4 border-l-transparent border-r-transparent border-b-gray-800"
+        ></div>
+      ) : (
+        <div
+          className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-800"
+        ></div>
+      )}
+    </div>
+  );
+}
+
+// 目录更新插件
+function TOCPlugin({ onTOCUpdate }: { onTOCUpdate: (items: Array<{id: string, text: string, level: number}>) => void }) {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    const updateTOC = () => {
+      editor.getEditorState().read(() => {
+        const root = $getRoot();
+        const headings: Array<{id: string, text: string, level: number}> = [];
+        
+        // 直接遍历根节点的直接子节点
+        const children = root.getChildren();
+        children.forEach((node: any) => {
+          if (node.getType() === 'heading') {
+            const text = node.getTextContent();
+            const level = parseInt(node.getTag().substring(1)); // h1 -> 1, h2 -> 2, etc.
+            
+            headings.push({
+              id: node.getKey(), // 使用节点的key作为唯一标识符
+              text: text || `标题 ${level}`,
+              level
+            });
+          }
+        });
+        
+        onTOCUpdate(headings);
+      });
+    };
+
+    const removeUpdateListener = editor.registerUpdateListener(() => {
+      updateTOC();
+    });
+
+    // 初始化时也更新一次
+    updateTOC();
+
+    return removeUpdateListener;
+  }, [editor, onTOCUpdate]);
+
+  return null;
+}
+
+// 目录组件
+function TableOfContents({ 
+  items, 
+  onItemClick 
+}: { 
+  items: Array<{id: string, text: string, level: number}>;
+  onItemClick: (id: string) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="p-4 text-center text-gray-500 text-sm">
+        <List className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+        <p>暂无标题</p>
+        <p className="text-xs">使用 # 创建标题</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4">
+      <div className="space-y-1">
+        {items.map((item, index) => (
+          <div
+            key={index}
+            className={`cursor-pointer hover:bg-gray-100 rounded px-2 py-1 text-sm transition-colors ${ 
+              item.level === 1 ? 'font-semibold text-gray-900' : 
+              item.level === 2 ? 'font-medium text-gray-800 ml-4' : 
+              'text-gray-700 ml-8'
+            }`}
+            style={{ 
+              paddingLeft: `${(item.level - 1) * 16 + 8}px`
+            }}
+            onClick={() => onItemClick(item.id)}
+            title={item.text}
+          >
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-gray-400 font-mono">
+                H{item.level}
+              </span>
+              <span className="truncate flex-1">
+                {item.text}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // 用于保存编辑器引用的插件
 function EditorRefPlugin({ onRef }: { onRef: (editor: any) => void }) {
