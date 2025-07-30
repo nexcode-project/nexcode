@@ -1991,8 +1991,37 @@ function EnterKeyPlugin() {
             if (selection.anchor.offset === 0 && (!textContent || !textContent.trim())) {
               event?.preventDefault();
               
-              // 将空列表项转换为段落
+              // 检查列表结构
+              const listParent = parentNode.getParent();
+              if (listParent && listParent.getType() === 'list') {
+                const listChildren = listParent.getChildren();
+                
+                // 如果这是列表中唯一的项目，将整个列表转换为段落
+                if (listChildren.length === 1) {
+                  const newParagraph = $createParagraphNode();
+                  listParent.replace(newParagraph);
+                  newParagraph.select();
+                } else {
+                  // 如果还有其他项目，只删除当前列表项，保持在同一位置
+                  const newParagraph = $createParagraphNode();
+                  parentNode.replace(newParagraph);
+                  newParagraph.select();
+                }
+              }
+              
+              return true;
+            }
+            
+            // 如果列表项有内容，但在开头按backspace，也转换为段落
+            if (selection.anchor.offset === 0 && textContent && textContent.trim()) {
+              event?.preventDefault();
+              
+              // 创建新段落并保留内容
               const newParagraph = $createParagraphNode();
+              const newTextNode = $createTextNode(textContent);
+              newParagraph.append(newTextNode);
+              
+              // 替换列表项
               parentNode.replace(newParagraph);
               newParagraph.select();
               
