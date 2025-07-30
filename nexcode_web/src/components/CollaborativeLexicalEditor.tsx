@@ -11,6 +11,7 @@ import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelec
 import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from '@lexical/selection';
 import { $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
 import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X, List, ChevronRight, ChevronDown } from 'lucide-react';
+import { KEY_ENTER_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeNode, CodeHighlightNode } from '@lexical/code';
@@ -1250,10 +1251,7 @@ export function CollaborativeLexicalEditor({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 目录侧边栏 */}
         {showTOC && (
-          <div className="w-1/5 border-r border-gray-200 bg-gray-50 flex flex-col">
-            <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
-              <h3 className="text-lg font-semibold text-gray-900">目录</h3>
-            </div>
+          <div className="w-56 bg-gray-50 flex flex-col">
             <div className="flex-1 overflow-auto">
               <TableOfContents 
                 items={tocItems} 
@@ -1305,7 +1303,7 @@ export function CollaborativeLexicalEditor({
         {/* 主编辑区域 */}
         <div className="flex-1 flex min-h-0">
           {/* 编辑器区域 */}
-          <div className={`${isPreviewMode ? 'w-1/2' : showTOC ? 'w-4/5' : 'w-5/6'} transition-all duration-300 flex flex-col min-h-0`}>
+          <div className={`${isPreviewMode ? 'w-1/2' : 'flex-1'} transition-all duration-300 flex flex-col min-h-0`}>
             <LexicalComposer initialConfig={initialConfig}>
               <div className="editor-container flex-1 flex flex-col min-h-0">
                 <FormatToolbar />
@@ -1332,6 +1330,7 @@ export function CollaborativeLexicalEditor({
                 <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
                 <FloatingFormatToolbar />
                 <TOCPlugin onTOCUpdate={handleTOCUpdate} />
+                <EnterKeyPlugin />
                 
                 {/* 统一的智能同步插件 */}
                 {sharedbClientRef.current && (
@@ -1367,7 +1366,7 @@ export function CollaborativeLexicalEditor({
           </div>
 
           {/* AI助手区域 */}
-          <div className={`${showTOC ? 'w-1/5' : 'w-1/6'} flex flex-col min-h-0`}>
+          <div className="w-80 flex flex-col min-h-0">
             <AIAssistant
               onInsertContent={insertContentToEditor}
               documentContent={previewContent}
@@ -1650,108 +1649,110 @@ function FloatingFormatToolbar() {
 
   return (
     <div
-      className="fixed z-50 flex items-center bg-gray-800 text-white rounded-lg shadow-lg px-2 py-1 space-x-1"
+      className="fixed z-50 bg-gray-800 text-white rounded-lg shadow-lg"
       style={{
         left: position.x,
         top: position.y - 45,
         transform: 'translateX(-50%)',
-        maxWidth: '300px',
+        minWidth: 'max-content',
       }}
     >
-      {/* 文本格式按钮 */}
-      <button
-        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isBold ? 'bg-gray-600' : ''}`}
-        onClick={() => toggleFormat('bold')}
-        title="粗体 (Ctrl+B)"
-      >
-        <Bold className="h-4 w-4" />
-      </button>
+      <div className="flex items-center px-3 py-2 space-x-1">
+        {/* 文本格式按钮 */}
+        <button
+          className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${formatState.isBold ? 'bg-gray-600' : ''}`}
+          onClick={() => toggleFormat('bold')}
+          title="粗体 (Ctrl+B)"
+        >
+          <Bold className="h-4 w-4" />
+        </button>
 
-      <button
-        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isItalic ? 'bg-gray-600' : ''}`}
-        onClick={() => toggleFormat('italic')}
-        title="斜体 (Ctrl+I)"
-      >
-        <Italic className="h-4 w-4" />
-      </button>
+        <button
+          className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${formatState.isItalic ? 'bg-gray-600' : ''}`}
+          onClick={() => toggleFormat('italic')}
+          title="斜体 (Ctrl+I)"
+        >
+          <Italic className="h-4 w-4" />
+        </button>
 
-      <button
-        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isUnderline ? 'bg-gray-600' : ''}`}
-        onClick={() => toggleFormat('underline')}
-        title="下划线 (Ctrl+U)"
-      >
-        <Underline className="h-4 w-4" />
-      </button>
+        <button
+          className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${formatState.isUnderline ? 'bg-gray-600' : ''}`}
+          onClick={() => toggleFormat('underline')}
+          title="下划线 (Ctrl+U)"
+        >
+          <Underline className="h-4 w-4" />
+        </button>
 
-      <button
-        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isStrikethrough ? 'bg-gray-600' : ''}`}
-        onClick={() => toggleFormat('strikethrough')}
-        title="删除线"
-      >
-        <Strikethrough className="h-4 w-4" />
-      </button>
+        <button
+          className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${formatState.isStrikethrough ? 'bg-gray-600' : ''}`}
+          onClick={() => toggleFormat('strikethrough')}
+          title="删除线"
+        >
+          <Strikethrough className="h-4 w-4" />
+        </button>
 
-      <button
-        className={`p-1.5 rounded hover:bg-gray-700 ${formatState.isCode ? 'bg-gray-600' : ''}`}
-        onClick={() => toggleFormat('code')}
-        title="行内代码"
-      >
-        <Code className="h-4 w-4" />
-      </button>
+        <button
+          className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${formatState.isCode ? 'bg-gray-600' : ''}`}
+          onClick={() => toggleFormat('code')}
+          title="行内代码"
+        >
+          <Code className="h-4 w-4" />
+        </button>
 
-      {/* 分隔线 */}
-      <div className="w-px h-6 bg-gray-600 mx-1"></div>
+        {/* 分隔线 */}
+        <div className="w-px h-6 bg-gray-600 mx-1"></div>
 
-      {/* 块级格式按钮 */}
-      <button
-        className="p-1.5 rounded hover:bg-gray-700"
-        onClick={convertToParagraph}
-        title="普通段落"
-      >
-        <Type className="h-4 w-4" />
-      </button>
+        {/* 块级格式按钮 */}
+        <button
+          className="p-1.5 rounded hover:bg-gray-700 transition-colors"
+          onClick={convertToParagraph}
+          title="转换为普通段落"
+        >
+          <Type className="h-4 w-4" />
+        </button>
 
-      <button
-        className="p-1.5 rounded hover:bg-gray-700"
-        onClick={() => convertToHeading(1)}
-        title="一级标题"
-      >
-        <span className="text-xs font-bold">H1</span>
-      </button>
+        <button
+          className="p-1.5 rounded hover:bg-gray-700 transition-colors"
+          onClick={() => convertToHeading(1)}
+          title="转换为一级标题"
+        >
+          <span className="text-xs font-bold px-1">H1</span>
+        </button>
 
-      <button
-        className="p-1.5 rounded hover:bg-gray-700"
-        onClick={() => convertToHeading(2)}
-        title="二级标题"
-      >
-        <span className="text-xs font-bold">H2</span>
-      </button>
+        <button
+          className="p-1.5 rounded hover:bg-gray-700 transition-colors"
+          onClick={() => convertToHeading(2)}
+          title="转换为二级标题"
+        >
+          <span className="text-xs font-bold px-1">H2</span>
+        </button>
 
-      <button
-        className="p-1.5 rounded hover:bg-gray-700"
-        onClick={() => convertToHeading(3)}
-        title="三级标题"
-      >
-        <span className="text-xs font-bold">H3</span>
-      </button>
+        <button
+          className="p-1.5 rounded hover:bg-gray-700 transition-colors"
+          onClick={() => convertToHeading(3)}
+          title="转换为三级标题"
+        >
+          <span className="text-xs font-bold px-1">H3</span>
+        </button>
 
-      <button
-        className="p-1.5 rounded hover:bg-gray-700"
-        onClick={convertToQuote}
-        title="引用块"
-      >
-        <Quote className="h-4 w-4" />
-      </button>
+        <button
+          className="p-1.5 rounded hover:bg-gray-700 transition-colors"
+          onClick={convertToQuote}
+          title="转换为引用块"
+        >
+          <Quote className="h-4 w-4" />
+        </button>
 
-      {/* 关闭按钮 */}
-      <div className="w-px h-6 bg-gray-600 mx-1"></div>
-      <button
-        className="p-1.5 rounded hover:bg-gray-700 text-gray-400"
-        onClick={() => setIsVisible(false)}
-        title="关闭"
-      >
-        <X className="h-3 w-3" />
-      </button>
+        {/* 关闭按钮 */}
+        <div className="w-px h-6 bg-gray-600 mx-1"></div>
+        <button
+          className="p-1.5 rounded hover:bg-gray-700 text-gray-400 transition-colors"
+          onClick={() => setIsVisible(false)}
+          title="关闭工具栏"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
 
       {/* 小三角形指向选中文本 */}
       {isBelow ? (
@@ -1818,45 +1819,123 @@ function TableOfContents({
   onItemClick: (id: string) => void;
 }) {
   if (items.length === 0) {
-    return (
-      <div className="p-4 text-center text-gray-500 text-sm">
-        <List className="h-8 w-8 mx-auto mb-2 text-gray-300" />
-        <p>暂无标题</p>
-        <p className="text-xs">使用 # 创建标题</p>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className="p-4">
+    <div className="pt-4 px-3">
       <div className="space-y-1">
-        {items.map((item, index) => (
-          <div
-            key={index}
-            className={`cursor-pointer hover:bg-gray-100 rounded px-2 py-1 text-sm transition-colors ${ 
-              item.level === 1 ? 'font-semibold text-gray-900' : 
-              item.level === 2 ? 'font-medium text-gray-800 ml-4' : 
-              'text-gray-700 ml-8'
-            }`}
-            style={{ 
-              paddingLeft: `${(item.level - 1) * 16 + 8}px`
-            }}
-            onClick={() => onItemClick(item.id)}
-            title={item.text}
-          >
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-gray-400 font-mono">
-                H{item.level}
-              </span>
-              <span className="truncate flex-1">
+        {items.map((item, index) => {
+          const levelStyles = {
+            1: 'text-gray-800 font-medium text-sm',
+            2: 'text-gray-600 text-sm',
+            3: 'text-gray-500 text-xs'
+          };
+          
+          return (
+            <div
+              key={index}
+              className={`cursor-pointer hover:text-blue-600 py-0.5 transition-colors ${levelStyles[item.level as keyof typeof levelStyles] || 'text-gray-500 text-xs'}`}
+              style={{ 
+                paddingLeft: `${(item.level - 1) * 16}px`
+              }}
+              onClick={() => onItemClick(item.id)}
+              title={item.text}
+            >
+              <span className="truncate block leading-relaxed">
                 {item.text}
               </span>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
+}
+
+// 回车键处理插件 - 确保每次回车都创建新的段落块
+function EnterKeyPlugin() {
+  const [editor] = useLexicalComposerContext();
+
+  useEffect(() => {
+    return editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      (event) => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) {
+          const anchorNode = selection.anchor.getNode();
+          let parentNode = anchorNode.getParent();
+          
+          // 查找块级父节点
+          while (parentNode && !['paragraph', 'heading', 'quote', 'listitem'].includes(parentNode.getType())) {
+            const grandParent = parentNode.getParent();
+            if (grandParent) {
+              parentNode = grandParent;
+            } else {
+              break;
+            }
+          }
+
+          if (parentNode && (parentNode.getType() === 'heading' || parentNode.getType() === 'quote')) {
+            event?.preventDefault();
+            
+            // 处理文本分割
+            const anchorNode = selection.anchor.getNode();
+            if (anchorNode.getType() === 'text') {
+              const offset = selection.anchor.offset;
+              const textContent = anchorNode.getTextContent();
+              
+              // 创建新段落
+              const newParagraph = $createParagraphNode();
+              
+              if (offset < textContent.length) {
+                // 有光标后的内容需要移动
+                const afterText = textContent.substring(offset);
+                
+                // 在新段落中添加后续文本
+                if (afterText) {
+                  const newTextNode = $createTextNode(afterText);
+                  newParagraph.append(newTextNode);
+                }
+                
+                // 从当前文本节点中删除光标后的内容
+                // 设置选择范围为光标后的所有文本，然后删除
+                const textNode = anchorNode as any;
+                textNode.select(offset, textContent.length);
+                const newSelection = $getSelection();
+                if ($isRangeSelection(newSelection)) {
+                  newSelection.removeText();
+                }
+              }
+              
+              // 插入新段落到当前块后面
+              parentNode.insertAfter(newParagraph);
+              
+              // 将光标移动到新段落
+              if (newParagraph.getChildrenSize() > 0) {
+                newParagraph.selectStart();
+              } else {
+                newParagraph.select();
+              }
+            } else {
+              // 如果不在文本节点中，只创建空的新段落
+              const newParagraph = $createParagraphNode();
+              parentNode.insertAfter(newParagraph);
+              newParagraph.select();
+            }
+            
+            return true;
+          }
+        }
+        
+        // 对于普通段落，让默认行为处理（会自动创建新段落）
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    );
+  }, [editor]);
+
+  return null;
 }
 
 // 用于保存编辑器引用的插件
