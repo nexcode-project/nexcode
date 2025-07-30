@@ -7,7 +7,11 @@ import { OnChangePlugin } from '@lexical/react/LexicalOnChangePlugin';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { MarkdownShortcutPlugin } from '@lexical/react/LexicalMarkdownShortcutPlugin';
 import { TRANSFORMERS } from '@lexical/markdown';
-import { $getRoot, EditorState, $createParagraphNode, $createTextNode } from 'lexical';
+import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelection, $isRangeSelection, FORMAT_TEXT_COMMAND, SELECTION_CHANGE_COMMAND } from 'lexical';
+import { $getSelectionStyleValueForProperty, $patchStyleText } from '@lexical/selection';
+import { $createHeadingNode } from '@lexical/rich-text';
+import { $createQuoteNode } from '@lexical/rich-text';
+import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X } from 'lucide-react';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
 import { CodeNode, CodeHighlightNode } from '@lexical/code';
@@ -1245,6 +1249,7 @@ export function CollaborativeLexicalEditor({
           <div className={`${isPreviewMode ? 'w-1/2' : 'w-5/6'} transition-all duration-300 flex flex-col min-h-0`}>
             <LexicalComposer initialConfig={initialConfig}>
               <div className="editor-container flex-1 flex flex-col min-h-0">
+                <FormatToolbar />
                 <RichTextPlugin
                   contentEditable={
                     <ContentEditable 
@@ -1366,6 +1371,92 @@ export function CollaborativeLexicalEditor({
     </div>
   );
 }
+
+// 格式工具栏组件
+function FormatToolbar() {
+  const [editor] = useLexicalComposerContext();
+  const [formatInfo, setFormatInfo] = useState<string>('普通文本');
+
+  useEffect(() => {
+    const updateFormatInfo = () => {
+      editor.getEditorState().read(() => {
+        const selection = $getSelection();
+        
+        if ($isRangeSelection(selection)) {
+          const node = selection.anchor.getNode();
+          const parent = node.getParent();
+          
+          let formatText = '';
+          
+          // 检查节点类型
+          if (parent) {
+            const parentType = parent.getType();
+            switch (parentType) {
+              case 'heading':
+                const level = (parent as any).getTag();
+                formatText = `${level.toUpperCase()} 标题`;
+                break;
+              case 'quote':
+                formatText = '引用块';
+                break;
+              case 'listitem':
+                const listParent = parent.getParent();
+                if (listParent?.getType() === 'list') {
+                  const listType = (listParent as any).getListType();
+                  formatText = listType === 'bullet' ? '• 无序列表' : '1. 有序列表';
+                }
+                break;
+              case 'code':
+                formatText = '代码块';
+                break;
+              case 'paragraph':
+                // 检查文本格式
+                if (node.getType() === 'text') {
+                  const format = node.getFormat();
+                  const formats = [];
+                  if (format & 1) formats.push('B');
+                  if (format & 2) formats.push('I');
+                  if (format & 4) formats.push('U');
+                  if (format & 8) formats.push('S');
+                  if (format & 16) formats.push('Code');
+                  formatText = formats.length > 0 ? `段落 (${formats.join(' ')})` : '段落';
+                } else {
+                  formatText = '段落';
+                }
+                break;
+              default:
+                formatText = '普通文本';
+            }
+          } else {
+            formatText = '普通文本';
+          }
+          
+          setFormatInfo(formatText);
+        }
+      });
+    };
+
+    const unregisterCommand = editor.registerUpdateListener(({ editorState }) => {
+      editorState.read(() => {
+        updateFormatInfo();
+      });
+    });
+
+    // 初始更新
+    updateFormatInfo();
+
+    return unregisterCommand;
+  }, [editor]);
+
+  return (
+    <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
+      <span className="font-medium">格式: </span>
+      <span className="text-blue-600">{formatInfo}</span>
+    </div>
+  );
+}
+
+
 
 // 用于保存编辑器引用的插件
 function EditorRefPlugin({ onRef }: { onRef: (editor: any) => void }) {
