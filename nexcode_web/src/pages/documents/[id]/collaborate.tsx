@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
+import Link from 'next/link';
 import { toast } from 'react-hot-toast';
-import { ArrowLeft, Share, Users, Save, Edit2, X } from 'lucide-react';
+import { ArrowLeft, Share, Users, Save, Edit2, X, User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
-import Layout from '@/components/Layout';
 import { CollaborativeLexicalEditor } from '@/components/CollaborativeLexicalEditor';
 
 // 导入类型
@@ -22,6 +22,8 @@ export default function DocumentCollaborate() {
   const [saving, setSaving] = useState(false);
   const [titleValue, setTitleValue] = useState('');
   const [currentLexicalContent, setCurrentLexicalContent] = useState<string>('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // 获取文档信息 - 只获取一次，然后传递给编辑器
   useEffect(() => {
@@ -159,6 +161,27 @@ export default function DocumentCollaborate() {
     router.push('/documents');
   };
 
+  const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/login');
+  };
+
+  // 点击外部关闭用户菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   if (isLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -208,14 +231,14 @@ export default function DocumentCollaborate() {
                 </button>
                 
                 {/* 标题编辑区域 */}
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center">
                   <h1 
                     contentEditable
                     suppressContentEditableWarning
                     onInput={handleTitleChange}
                     onBlur={handleTitleBlur}
                     onKeyDown={handleTitleKeyDown}
-                    className="text-xl font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none"
+                    className="text-xl font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none whitespace-nowrap overflow-hidden text-ellipsis max-w-md"
                     title="点击编辑标题（建议简明扼要，回车保存）"
                   >
                     {document.title || "请输入标题"}
@@ -240,6 +263,57 @@ export default function DocumentCollaborate() {
                   <Save className="h-4 w-4" />
                   <span>{saving ? '保存中...' : '保存为新版本'}</span>
                 </button>
+
+                {/* 用户菜单 */}
+                <div className="relative ml-4" ref={userMenuRef}>
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <User className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <span className="text-gray-700 font-medium">
+                      {user?.username || user?.full_name}
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
+                      showUserMenu ? 'rotate-180' : ''
+                    }`} />
+                  </button>
+
+                  {/* 用户下拉菜单 */}
+                  {showUserMenu && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      {/* 用户信息 */}
+                      <div className="px-4 py-3 border-b border-gray-100">
+                        <p className="text-sm font-medium text-gray-900">
+                          {user?.full_name || user?.username}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {user?.email}
+                        </p>
+                      </div>
+
+                      {/* 菜单项 */}
+                      <div className="py-1">
+                        <Link
+                          href="/settings"
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <Settings className="w-4 h-4 mr-3" />
+                          设置
+                        </Link>
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <LogOut className="w-4 h-4 mr-3" />
+                          退出登录
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
