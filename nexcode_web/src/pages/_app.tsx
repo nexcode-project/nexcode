@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from 'react-query';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 import Layout from '@/components/Layout';
+import { useRouter } from 'next/router';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,16 +18,24 @@ const queryClient = new QueryClient({
 
 export default function App({ Component, pageProps }: AppProps) {
   const checkAuth = useAuthStore((state) => state.checkAuth);
+  const router = useRouter();
 
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
 
+  // 检查是否是collaborate页面，如果是则不使用Layout
+  const isCollaboratePage = router.pathname.includes('/documents/') && router.pathname.includes('/collaborate');
+
   return (
     <QueryClientProvider client={queryClient}>
-      <Layout>
+      {isCollaboratePage ? (
         <Component {...pageProps} />
-      </Layout>
+      ) : (
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
+      )}
       <Toaster
         position="top-right"
         toastOptions={{
