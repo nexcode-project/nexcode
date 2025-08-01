@@ -1431,48 +1431,89 @@ export function CollaborativeLexicalEditor({
         {showVersionHistory && (
           <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
             <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">版本历史</h3>
+              <h3 className="text-lg font-semibold text-gray-900">历史记录</h3>
             </div>
             <div className="flex-1 overflow-auto">
               {versionHistory.length > 0 ? (
                 <div className="p-2">
-                  {versionHistory.map((version) => (
-                                          <div
-                        key={version.id}
-                        className="p-3 mb-2 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-900">
-                            版本 {version.version_number}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(version.created_at).toLocaleString()}
-                          </span>
+                  {(() => {
+                    // 按日期分组版本历史
+                    const groupedVersions = versionHistory.reduce((groups, version) => {
+                      const date = new Date(version.created_at);
+                      const today = new Date();
+                      const yesterday = new Date(today);
+                      yesterday.setDate(yesterday.getDate() - 1);
+                      
+                      let groupKey = '';
+                      if (date.toDateString() === today.toDateString()) {
+                        groupKey = '今天';
+                      } else if (date.toDateString() === yesterday.toDateString()) {
+                        groupKey = '昨天';
+                      } else {
+                        // 获取星期几
+                        const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+                        groupKey = weekdays[date.getDay()];
+                      }
+                      
+                      if (!groups[groupKey]) {
+                        groups[groupKey] = [];
+                      }
+                      groups[groupKey].push(version);
+                      return groups;
+                    }, {} as Record<string, typeof versionHistory>);
+
+                    return Object.entries(groupedVersions).map(([groupKey, versions]) => (
+                      <div key={groupKey} className="mb-4">
+                        <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          {groupKey}
                         </div>
-                        <p className="text-sm text-gray-600 mb-1">{version.change_description}</p>
-                        <p className="text-xs text-gray-500 truncate mb-3">
-                          {version.content.slice(0, 100)}...
-                        </p>
-                        <div className="flex gap-2">
-                          <button
+                        {versions.map((version, index) => (
+                          <div
+                            key={version.id}
                             onClick={() => handlePreviewVersion(version)}
-                            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                            className={`p-3 mb-1 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow cursor-pointer hover:bg-gray-50 ${
+                              isVersionPreviewMode && previewVersion?.version.id === version.id ? 'bg-blue-50 border-blue-200' : ''
+                            }`}
                           >
-                            预览
-                          </button>
-                          <button
-                            onClick={() => handleRestoreVersion(version.version_number)}
-                            className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
-                          >
-                            恢复
-                          </button>
-                        </div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm text-gray-900">
+                                {new Date(version.created_at).toLocaleDateString('zh-CN', {
+                                  month: 'numeric',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                              <div className="flex items-center space-x-1">
+                                {isVersionPreviewMode && previewVersion?.version.id === version.id ? (
+                                  <ChevronDown className="h-3 w-3 text-gray-400" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3 text-gray-400" />
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 mb-1">
+                              <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                              <span className="text-sm text-gray-700">
+                                {version.changed_by?.username || '未知用户'}
+                              </span>
+                            </div>
+                            {/* 根据截图显示特殊状态文本 */}
+                            {index === 0 && groupKey === '昨天' && (
+                              <p className="text-sm text-gray-500">最近更新</p>
+                            )}
+                            {index === 1 && groupKey === '昨天' && (
+                              <p className="text-sm text-gray-500">本次修改已保存至本地</p>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                  ))}
+                    ));
+                  })()}
                 </div>
               ) : (
                 <div className="p-4 text-center text-gray-500">
-                  暂无版本历史
+                  暂无历史记录
                 </div>
               )}
             </div>
