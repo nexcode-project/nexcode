@@ -1431,7 +1431,7 @@ export function CollaborativeLexicalEditor({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 目录侧边栏 */}
         {showTOC && (
-          <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
+          <div className="w-64 border-r border-gray-200 bg-white flex flex-col">
             <div className="flex-1 overflow-auto">
               <TableOfContents 
                 items={tocItems} 
@@ -1443,10 +1443,10 @@ export function CollaborativeLexicalEditor({
 
         {/* 版本历史侧边栏 */}
         {showVersionHistory && (
-          <div className="w-80 border-r border-gray-200 bg-white flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">历史记录</h3>
-            </div>
+          <div className="w-64 border-r border-gray-200 bg-white flex flex-col">
+                            <div className="px-4 py-2">
+                  <h3 className="text-xs font-medium text-gray-600">历史记录</h3>
+                </div>
             <div className="flex-1 overflow-auto">
               {versionHistory.length > 0 ? (
                 <div className="p-2">
@@ -1772,7 +1772,7 @@ function FormatToolbar({
   }, [editor]);
 
   return (
-    <div className="flex-shrink-0 px-4 py-2 bg-white border-b border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+    <div className="flex-shrink-0 px-4 py-2 bg-white text-xs text-gray-600 flex items-center justify-between">
       <div>
         <span className="font-medium">格式: </span>
         <span className="text-blue-600">{formatInfo}</span>
