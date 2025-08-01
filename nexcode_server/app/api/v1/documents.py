@@ -305,6 +305,36 @@ async def create_version_snapshot(
     return {"message": "版本快照已创建"}
 
 
+@router.get("/{document_id}/versions/{version_number}/content")
+async def get_version_content(
+    document_id: int,
+    version_number: int,
+    current_user: CurrentUser,
+    db: DatabaseSession
+):
+    """获取指定版本的内容（用于预览）"""
+    # 检查权限
+    has_permission = await permission_service.check_document_permission(
+        db, current_user.id, document_id, PermissionLevel.READER
+    )
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无权限访问此文档"
+        )
+    
+    content = await document_storage_service.get_version_content(document_id, version_number)
+    
+    if content is not None:
+        return {
+            "success": True,
+            "content": content,
+            "version_number": version_number
+        }
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="版本不存在"
+        )
+
 @router.post("/{document_id}/versions/{version_number}/restore", response_model=VersionRestoreResponse)
 async def restore_version(
     document_id: int,
