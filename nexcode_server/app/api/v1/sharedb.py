@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import hashlib
 
 from app.core.dependencies import get_current_user, get_db
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.sharedb_service import get_sharedb_service, ShareDBService
 from app.models.database import User
 from app.services.document_service import DocumentService
@@ -192,4 +193,38 @@ async def get_document_status(
         }
     except Exception as e:
         logger.error(f"Failed to get document status for {doc_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get document status") 
+        raise HTTPException(status_code=500, detail="Failed to get document status")
+
+@router.post("/documents/{doc_id}/restore/{version_number}")
+async def restore_document_version(
+    doc_id: str,
+    version_number: int,
+    current_user: User = Depends(get_current_user),
+    sharedb: ShareDBService = Depends(get_sharedb_service),
+    db: AsyncSession = Depends(get_db)
+):
+    """从 PostgreSQL 版本历史恢复到指定版本"""
+    try:
+        result = await sharedb.restore_version(
+            doc_id=doc_id,
+            target_version_number=version_number,
+            user_id=current_user.id,
+            db_session=db
+        )
+        
+        if result["success"]:
+            return {
+                "success": True,
+                "content": result["content"],
+                "version": result["version"],
+                "restored_from_version": result["restored_from_version"],
+                "message": f"已恢复到版本 {version_number}"
+            }
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail=result["error"]
+            )
+    except Exception as e:
+        logger.error(f"Failed to restore version {version_number} for {doc_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to restore version") 

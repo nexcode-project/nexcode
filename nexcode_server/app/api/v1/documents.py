@@ -327,6 +327,23 @@ async def restore_version(
     )
     
     if result and result.get("success"):
+        # 同步到 ShareDB
+        try:
+            from app.services.sharedb_service import get_sharedb_service
+            sharedb_service = get_sharedb_service()
+            await sharedb_service.sync_document(
+                doc_id=str(document_id),
+                version=result["new_version"],
+                content=result["content"],
+                user_id=current_user.id,
+                create_version=False,  # 不创建新版本，因为已经在 PostgreSQL 中创建了
+                db_session=db
+            )
+            print(f"✅ 版本恢复已同步到 ShareDB: document_id={document_id}, version={result['new_version']}")
+        except Exception as e:
+            print(f"⚠️ 同步到 ShareDB 失败: {e}")
+            # 不抛出异常，因为 PostgreSQL 恢复已经成功
+        
         return VersionRestoreResponse(
             success=True,
             content=result["content"],

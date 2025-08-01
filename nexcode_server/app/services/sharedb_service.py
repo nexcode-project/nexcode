@@ -310,6 +310,75 @@ class ShareDBService:
             
         except Exception as e:
             logger.warning(f"Failed to create version snapshot: {e}")
+
+    async def restore_version(self, doc_id: str, target_version_number: int, user_id: int, db_session: AsyncSession = None) -> Dict[str, Any]:
+        """从 PostgreSQL 版本历史恢复到指定版本，并同步到 ShareDB"""
+        try:
+            from sqlalchemy import select
+            
+            if not db_session:
+                raise ValueError("Database session is required for version restoration")
+            
+            # 从 PostgreSQL 获取目标版本内容
+            version_stmt = select(DocumentVersion).where(
+                DocumentVersion.document_id == int(doc_id),
+                DocumentVersion.version_number == target_version_number
+            )
+            result = await db_session.execute(version_stmt)
+            target_version = result.scalar_one_or_none()
+            
+            if not target_version:
+                return {
+                    "success": False,
+                    "error": f"Version {target_version_number} not found"
+                }
+            
+            # 获取当前 ShareDB 版本
+            current_doc = self.documents.find_one({"doc_id": doc_id})
+            current_sharedb_version = current_doc["version"] if current_doc else 0
+            
+            # 更新 ShareDB 内容
+            new_sharedb_version = current_sharedb_version + 1
+            self.documents.update_one(
+                {"doc_id": doc_id},
+                {
+                    "$set": {
+                        "content": target_version.content,
+                        "version": new_sharedb_version,
+                        "updated_at": datetime.utcnow(),
+                        "last_editor_id": user_id
+                    }
+                },
+                upsert=True
+            )
+            
+            # 记录恢复操作
+            operation = {
+                "doc_id": doc_id,
+                "version": new_sharedb_version,
+                "content": target_version.content,
+                "user_id": user_id,
+                "timestamp": datetime.utcnow(),
+                "operation_type": "version_restore",
+                "restored_from_version": target_version_number
+            }
+            self.operations.insert_one(operation)
+            
+            logger.info(f"✅ Version restored in ShareDB: {doc_id} -> version {target_version_number} (ShareDB v{new_sharedb_version})")
+            
+            return {
+                "success": True,
+                "content": target_version.content,
+                "version": new_sharedb_version,
+                "restored_from_version": target_version_number
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to restore version: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
     
     async def close(self):
         """关闭服务"""

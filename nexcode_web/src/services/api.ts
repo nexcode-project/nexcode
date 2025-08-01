@@ -247,8 +247,9 @@ class ApiService {
    * 恢復文檔版本
    */
   async restoreDocumentVersion(id: number, versionNumber: number): Promise<VersionRestoreResponse> {
+    // 使用 ShareDB 的版本恢复功能，这样可以确保前端编辑器能立即看到恢复的内容
     const response = await this.client.post<VersionRestoreResponse>(
-      `/v1/documents/${id}/versions/${versionNumber}/restore`
+      `/v1/sharedb/documents/${id}/restore/${versionNumber}`
     );
     return response.data;
   }
