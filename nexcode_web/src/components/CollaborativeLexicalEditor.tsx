@@ -1152,7 +1152,11 @@ export function CollaborativeLexicalEditor({
       loadVersionHistory();
     }
     setShowVersionHistory(!showVersionHistory);
-  }, [showVersionHistory, loadVersionHistory]);
+    // 如果显示历史记录，则隐藏目录
+    if (!showVersionHistory) {
+      setShowTOC(false);
+    }
+  }, [showVersionHistory, loadVersionHistory, setShowTOC]);
 
   // 更新目录
   const handleTOCUpdate = useCallback((items: Array<{id: string, text: string, level: number}>) => {
@@ -1336,7 +1340,13 @@ export function CollaborativeLexicalEditor({
           
           {/* 目录按钮 */}
           <button
-            onClick={() => setShowTOC(!showTOC)}
+            onClick={() => {
+              setShowTOC(!showTOC);
+              // 如果显示目录，则隐藏历史记录
+              if (!showTOC) {
+                setShowVersionHistory(false);
+              }
+            }}
             className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               showTOC 
                 ? 'text-blue-700 bg-blue-100 hover:bg-blue-200' 
@@ -1351,7 +1361,11 @@ export function CollaborativeLexicalEditor({
           {/* 历史按钮 */}
           <button
             onClick={toggleVersionHistory}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              showVersionHistory 
+                ? 'text-blue-700 bg-blue-100 hover:bg-blue-200' 
+                : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+            }`}
             title="版本历史"
           >
             <History className="h-4 w-4" />
@@ -1417,7 +1431,7 @@ export function CollaborativeLexicalEditor({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 目录侧边栏 */}
         {showTOC && (
-          <div className="w-56 bg-gray-50 flex flex-col">
+          <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
             <div className="flex-1 overflow-auto">
               <TableOfContents 
                 items={tocItems} 
@@ -1462,12 +1476,19 @@ export function CollaborativeLexicalEditor({
                       return groups;
                     }, {} as Record<string, typeof versionHistory>);
 
-                    return Object.entries(groupedVersions).map(([groupKey, versions]) => (
+                    return Object.entries(groupedVersions)
+                      .sort(([, versionsA], [, versionsB]) => {
+                        // 按分组中最新版本的时间倒序排列
+                        const latestA = Math.max(...versionsA.map(v => new Date(v.created_at).getTime()));
+                        const latestB = Math.max(...versionsB.map(v => new Date(v.created_at).getTime()));
+                        return latestB - latestA;
+                      })
+                      .map(([groupKey, versions]) => (
                       <div key={groupKey} className="mb-4">
                         <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
                           {groupKey}
                         </div>
-                        {versions.map((version, index) => (
+                        {versions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((version, index) => (
                           <div
                             key={version.id}
                             onClick={() => handlePreviewVersion(version)}
