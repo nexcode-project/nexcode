@@ -1210,7 +1210,7 @@ export function CollaborativeLexicalEditor({
     <div className="lexical-editor h-screen flex flex-col bg-white overflow-hidden">
       {/* 顶部工具栏 */}
       <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
-        {/* 左侧：返回按钮、标题、状态信息 */}
+        {/* 左侧：返回按钮和状态信息 */}
         <div className="flex items-center space-x-4">
           {/* 返回按钮 */}
           {onBack && (
@@ -1220,23 +1220,6 @@ export function CollaborativeLexicalEditor({
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
-          )}
-          
-          {/* 标题编辑区域 */}
-          {documentTitle && onTitleChange && onTitleBlur && onTitleKeyDown && (
-            <div className="flex items-center">
-              <h1 
-                contentEditable
-                suppressContentEditableWarning
-                onInput={onTitleChange}
-                onBlur={onTitleBlur}
-                onKeyDown={onTitleKeyDown}
-                className="text-lg font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none whitespace-nowrap overflow-hidden text-ellipsis max-w-md"
-                title="点击编辑标题（建议简明扼要，回车保存）"
-              >
-                {documentTitle || "请输入标题"}
-              </h1>
-            </div>
           )}
           
           {/* 文档状态 */}
@@ -1278,6 +1261,25 @@ export function CollaborativeLexicalEditor({
             </div>
           )}
         </div>
+
+        {/* 中间：标题编辑区域 */}
+        {documentTitle && onTitleChange && onTitleBlur && onTitleKeyDown && (
+          <div className="flex-1 flex justify-center">
+            <div className="flex items-center">
+              <h1 
+                contentEditable
+                suppressContentEditableWarning
+                onInput={onTitleChange}
+                onBlur={onTitleBlur}
+                onKeyDown={onTitleKeyDown}
+                className="text-lg font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none whitespace-nowrap overflow-hidden text-ellipsis max-w-md text-center"
+                title="点击编辑标题（建议简明扼要，回车保存）"
+              >
+                {documentTitle || "请输入标题"}
+              </h1>
+            </div>
+          </div>
+        )}
 
         {/* 右侧：操作按钮 */}
         <div className="flex items-center space-x-2">
