@@ -11,7 +11,7 @@ import { $getRoot, EditorState, $createParagraphNode, $createTextNode, $getSelec
 import { $createListItemNode } from '@lexical/list';
 import { $getSelectionStyleValueForProperty, $patchStyleText, $setBlocksType } from '@lexical/selection';
 import { $createHeadingNode, $createQuoteNode } from '@lexical/rich-text';
-import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X, List, ChevronRight, ChevronDown } from 'lucide-react';
+import { Bold, Italic, Underline, Strikethrough, Code, Quote, Type, Hash, X, List, ChevronRight, ChevronDown, ArrowLeft, Share, User, Settings, LogOut } from 'lucide-react';
 import { KEY_ENTER_COMMAND, KEY_BACKSPACE_COMMAND, COMMAND_PRIORITY_LOW } from 'lexical';
 import { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import { ListItemNode, ListNode } from '@lexical/list';
@@ -28,6 +28,7 @@ import { ShareDBClient, DocumentState } from '@/services/sharedb';
 import { apiService } from '@/services/api';
 // 假设导入 authStore，如果项目有
 import { useAuthStore } from '@/store/authStore';  // 如果没有，忽略这行
+import Link from 'next/link';
 
 // 编辑器节点配置
 const editorNodes = [
@@ -382,6 +383,20 @@ interface CollaborativeLexicalEditorProps {
   onContentChange?: (content: string) => void;
   onSave?: (content: string) => Promise<void>;
   onLexicalContentChange?: (lexicalContent: string) => void; // 新增：Lexical格式内容变化回调
+  // 新增：标题栏功能
+  documentTitle?: string;
+  onTitleChange?: (e: React.FormEvent<HTMLHeadingElement>) => void;
+  onTitleBlur?: () => void;
+  onTitleKeyDown?: (e: React.KeyboardEvent<HTMLHeadingElement>) => void;
+  onBack?: () => void;
+  onShare?: () => void;
+  saving?: boolean;
+  currentLexicalContent?: string;
+  user?: any;
+  onLogout?: () => void;
+  showUserMenu?: boolean;
+  setShowUserMenu?: (show: boolean) => void;
+  userMenuRef?: React.RefObject<HTMLDivElement>;
 }
 
 // 新增AI助手组件
@@ -680,7 +695,21 @@ export function CollaborativeLexicalEditor({
   initialDocumentState, // 新增参数
   onContentChange,
   onSave,
-  onLexicalContentChange
+  onLexicalContentChange,
+  // 新增：标题栏功能
+  documentTitle,
+  onTitleChange,
+  onTitleBlur,
+  onTitleKeyDown,
+  onBack,
+  onShare,
+  saving,
+  currentLexicalContent,
+  user,
+  onLogout,
+  showUserMenu,
+  setShowUserMenu,
+  userMenuRef
 }: CollaborativeLexicalEditorProps) {
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [content, setContent] = useState(initialContent);
@@ -1181,8 +1210,36 @@ export function CollaborativeLexicalEditor({
     <div className="lexical-editor h-screen flex flex-col bg-white overflow-hidden">
       {/* 顶部工具栏 */}
       <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
-        {/* 左侧：文档状态 */}
+        {/* 左侧：返回按钮、标题、状态信息 */}
         <div className="flex items-center space-x-4">
+          {/* 返回按钮 */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
+          
+          {/* 标题编辑区域 */}
+          {documentTitle && onTitleChange && onTitleBlur && onTitleKeyDown && (
+            <div className="flex items-center">
+              <h1 
+                contentEditable
+                suppressContentEditableWarning
+                onInput={onTitleChange}
+                onBlur={onTitleBlur}
+                onKeyDown={onTitleKeyDown}
+                className="text-lg font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none whitespace-nowrap overflow-hidden text-ellipsis max-w-md"
+                title="点击编辑标题（建议简明扼要，回车保存）"
+              >
+                {documentTitle || "请输入标题"}
+              </h1>
+            </div>
+          )}
+          
+          {/* 文档状态 */}
           <div className="flex items-center space-x-2">
             <div className={`w-3 h-3 rounded-full ${hasUnsavedChanges ? 'bg-yellow-500' : 'bg-green-500'}`}></div>
             <span className="text-sm text-gray-600 font-medium">
@@ -1224,6 +1281,30 @@ export function CollaborativeLexicalEditor({
 
         {/* 右侧：操作按钮 */}
         <div className="flex items-center space-x-2">
+          {/* 分享按钮 */}
+          {onShare && (
+            <button
+              onClick={onShare}
+              className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+            >
+              <Share className="h-4 w-4" />
+              <span>分享</span>
+            </button>
+          )}
+          
+          {/* 保存按钮 */}
+          {onSave && (
+            <button
+              onClick={() => onSave(currentLexicalContent || '')}
+              disabled={saving || (!currentLexicalContent && !initialContent)}
+              className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg"
+            >
+              <Save className="h-4 w-4" />
+              <span>{saving ? '保存中...' : '保存为新版本'}</span>
+            </button>
+          )}
+          
+          {/* 目录按钮 */}
           <button
             onClick={() => setShowTOC(!showTOC)}
             className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
@@ -1237,6 +1318,7 @@ export function CollaborativeLexicalEditor({
             <span>目录</span>
           </button>
           
+          {/* 历史按钮 */}
           <button
             onClick={toggleVersionHistory}
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
@@ -1245,6 +1327,59 @@ export function CollaborativeLexicalEditor({
             <History className="h-4 w-4" />
             <span>历史</span>
           </button>
+
+          {/* 用户菜单 */}
+          {user && onLogout && showUserMenu !== undefined && setShowUserMenu && userMenuRef && (
+            <div className="relative ml-4" ref={userMenuRef}>
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-blue-600" />
+                </div>
+                <span className="text-gray-700 font-medium">
+                  {user?.username || user?.full_name}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
+                  showUserMenu ? 'rotate-180' : ''
+                }`} />
+              </button>
+
+              {/* 用户下拉菜单 */}
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  {/* 用户信息 */}
+                  <div className="px-4 py-3 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900">
+                      {user?.full_name || user?.username}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {user?.email}
+                    </p>
+                  </div>
+
+                  {/* 菜单项 */}
+                  <div className="py-1">
+                    <Link
+                      href="/settings"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <Settings className="w-4 h-4 mr-3" />
+                      设置
+                    </Link>
+                    <button
+                      onClick={onLogout}
+                      className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    >
+                      <LogOut className="w-4 h-4 mr-3" />
+                      退出登录
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
