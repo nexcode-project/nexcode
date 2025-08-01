@@ -218,107 +218,6 @@ export default function DocumentCollaborate() {
       </Head>
       
       <div className="min-h-screen bg-gray-50">
-        {/* 顶部导航 */}
-        <div className="bg-white border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center justify-between h-16">
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={handleBack}
-                  className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                >
-                  <ArrowLeft className="h-5 w-5" />
-                </button>
-                
-                {/* 标题编辑区域 */}
-                <div className="flex items-center">
-                  <h1 
-                    contentEditable
-                    suppressContentEditableWarning
-                    onInput={handleTitleChange}
-                    onBlur={handleTitleBlur}
-                    onKeyDown={handleTitleKeyDown}
-                    className="text-xl font-semibold text-gray-900 cursor-text hover:text-blue-600 transition-colors focus:outline-none whitespace-nowrap overflow-hidden text-ellipsis max-w-md"
-                    title="点击编辑标题（建议简明扼要，回车保存）"
-                  >
-                    {document.title || "请输入标题"}
-                  </h1>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={handleShare}
-                  className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
-                >
-                  <Share className="h-4 w-4" />
-                  <span>分享</span>
-                </button>
-                
-                <button
-                  onClick={() => handleSave()}
-                  disabled={saving || (!currentLexicalContent && !document?.content)}
-                  className="flex items-center space-x-2 bg-primary-600 hover:bg-primary-700 disabled:bg-primary-400 text-white px-4 py-2 rounded-lg"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{saving ? '保存中...' : '保存为新版本'}</span>
-                </button>
-
-                {/* 用户菜单 */}
-                <div className="relative ml-4" ref={userMenuRef}>
-                  <button
-                    onClick={() => setShowUserMenu(!showUserMenu)}
-                    className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <User className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <span className="text-gray-700 font-medium">
-                      {user?.username || user?.full_name}
-                    </span>
-                    <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${
-                      showUserMenu ? 'rotate-180' : ''
-                    }`} />
-                  </button>
-
-                  {/* 用户下拉菜单 */}
-                  {showUserMenu && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                      {/* 用户信息 */}
-                      <div className="px-4 py-3 border-b border-gray-100">
-                        <p className="text-sm font-medium text-gray-900">
-                          {user?.full_name || user?.username}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {user?.email}
-                        </p>
-                      </div>
-
-                      {/* 菜单项 */}
-                      <div className="py-1">
-                        <Link
-                          href="/settings"
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <Settings className="w-4 h-4 mr-3" />
-                          设置
-                        </Link>
-                        <button
-                          onClick={handleLogout}
-                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        >
-                          <LogOut className="w-4 h-4 mr-3" />
-                          退出登录
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* 协作编辑器 */}
         {documentState && (
           <CollaborativeLexicalEditor
@@ -334,6 +233,20 @@ export default function DocumentCollaborate() {
               // 这里lexicalContent是Lexical JSON格式
               setCurrentLexicalContent(lexicalContent);
             }}
+            // 传递额外的功能
+            documentTitle={document.title}
+            onTitleChange={handleTitleChange}
+            onTitleBlur={handleTitleBlur}
+            onTitleKeyDown={handleTitleKeyDown}
+            onBack={handleBack}
+            onShare={handleShare}
+            saving={saving}
+            currentLexicalContent={currentLexicalContent}
+            user={user}
+            onLogout={handleLogout}
+            showUserMenu={showUserMenu}
+            setShowUserMenu={setShowUserMenu}
+            userMenuRef={userMenuRef}
           />
         )}
       </div>
