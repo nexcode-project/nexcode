@@ -721,6 +721,8 @@ export function CollaborativeLexicalEditor({
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [versionHistory, setVersionHistory] = useState<DocumentVersion[]>([]);
+  const [previewVersion, setPreviewVersion] = useState<{version: DocumentVersion, content: string} | null>(null);
+  const [isVersionPreviewMode, setIsVersionPreviewMode] = useState(false);
   const [hasCollaborativeUpdates, setHasCollaborativeUpdates] = useState(false); // 协作更新指示
   const [previewContent, setPreviewContent] = useState(''); // 用于预览的可读文本内容
   const [showTOC, setShowTOC] = useState(true); // 显示目录
@@ -1078,6 +1080,20 @@ export function CollaborativeLexicalEditor({
     }
   }, [documentId]);
 
+  // 预览版本
+  const handlePreviewVersion = useCallback(async (version: DocumentVersion) => {
+    try {
+      const data = await apiService.getVersionContent(documentId, version.version_number);
+      setPreviewVersion({ version, content: data.content });
+      setIsVersionPreviewMode(true);
+      // 将预览内容设置到主编辑器
+      updateEditorContent(data.content);
+    } catch (error) {
+      console.error('Failed to preview version:', error);
+      toast.error('预览版本失败');
+    }
+  }, [documentId, updateEditorContent]);
+
   // 恢复版本
   const handleRestoreVersion = useCallback(async (versionNumber: number) => {
     try {
@@ -1085,6 +1101,8 @@ export function CollaborativeLexicalEditor({
       setContent(data.content);
       updateEditorContent(data.content);
       setShowVersionHistory(false);
+      setIsVersionPreviewMode(false);
+      setPreviewVersion(null);
       toast.success('版本已恢复');
       
       // 同步到ShareDB
@@ -1096,6 +1114,16 @@ export function CollaborativeLexicalEditor({
       toast.error('恢复版本失败');
     }
   }, [documentId, updateEditorContent]);
+
+  // 取消预览
+  const handleCancelPreview = useCallback(() => {
+    setIsVersionPreviewMode(false);
+    setPreviewVersion(null);
+    // 恢复当前内容
+    if (content) {
+      updateEditorContent(content);
+    }
+  }, [content, updateEditorContent]);
 
   // 保存编辑器引用
   const saveEditorRef = useCallback((editor: any) => {
@@ -1409,24 +1437,37 @@ export function CollaborativeLexicalEditor({
               {versionHistory.length > 0 ? (
                 <div className="p-2">
                   {versionHistory.map((version) => (
-                    <div
-                      key={version.id}
-                      className="p-3 mb-2 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow cursor-pointer"
-                      onClick={() => handleRestoreVersion(version.version_number)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-900">
-                          版本 {version.version_number}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(version.created_at).toLocaleString()}
-                        </span>
+                                          <div
+                        key={version.id}
+                        className="p-3 mb-2 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            版本 {version.version_number}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(version.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-1">{version.change_description}</p>
+                        <p className="text-xs text-gray-500 truncate mb-3">
+                          {version.content.slice(0, 100)}...
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handlePreviewVersion(version)}
+                            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                          >
+                            预览
+                          </button>
+                          <button
+                            onClick={() => handleRestoreVersion(version.version_number)}
+                            className="px-3 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                          >
+                            恢复
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-sm text-gray-600 mb-1">{version.change_description}</p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {version.content.slice(0, 100)}...
-                      </p>
-                    </div>
                   ))}
                 </div>
               ) : (
@@ -1439,12 +1480,17 @@ export function CollaborativeLexicalEditor({
         )}
 
         {/* 主编辑区域 */}
-        <div className="flex-1 flex min-h-0">
+        <div className="flex-1 flex min-h-0 relative">
           {/* 编辑器区域 */}
           <div className={`${isPreviewMode ? 'w-1/2' : 'flex-1'} transition-all duration-300 flex flex-col min-h-0`}>
             <LexicalComposer initialConfig={initialConfig}>
               <div className="editor-container flex-1 flex flex-col min-h-0">
-                <FormatToolbar />
+                <FormatToolbar 
+                  isVersionPreviewMode={isVersionPreviewMode}
+                  previewVersion={previewVersion}
+                  onRestoreVersion={() => previewVersion && handleRestoreVersion(previewVersion.version.version_number)}
+                  onCancelPreview={handleCancelPreview}
+                />
                 <RichTextPlugin
                   contentEditable={
                     <ContentEditable 
@@ -1499,9 +1545,16 @@ export function CollaborativeLexicalEditor({
                 
                 {/* 保存编辑器引用 */}
                 <EditorRefPlugin onRef={saveEditorRef} />
+                
+                {/* 版本预览插件 */}
+                {isVersionPreviewMode && previewVersion && (
+                  <VersionPreviewPlugin content={previewVersion.content} />
+                )}
               </div>
             </LexicalComposer>
           </div>
+
+
 
           {/* AI助手区域 */}
           <div className="w-80 flex flex-col min-h-0">
@@ -1571,7 +1624,17 @@ export function CollaborativeLexicalEditor({
 }
 
 // 格式工具栏组件
-function FormatToolbar() {
+function FormatToolbar({ 
+  isVersionPreviewMode, 
+  previewVersion, 
+  onRestoreVersion, 
+  onCancelPreview 
+}: {
+  isVersionPreviewMode?: boolean;
+  previewVersion?: {version: DocumentVersion, content: string} | null;
+  onRestoreVersion?: () => void;
+  onCancelPreview?: () => void;
+}) {
   const [editor] = useLexicalComposerContext();
   const [formatInfo, setFormatInfo] = useState<string>('普通文本');
 
@@ -1647,9 +1710,32 @@ function FormatToolbar() {
   }, [editor]);
 
   return (
-    <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600">
-      <span className="font-medium">格式: </span>
-      <span className="text-blue-600">{formatInfo}</span>
+    <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+      <div>
+        <span className="font-medium">格式: </span>
+        <span className="text-blue-600">{formatInfo}</span>
+      </div>
+      
+      {/* 版本预览模式下的恢复按钮 */}
+      {isVersionPreviewMode && previewVersion && (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500">
+            预览版本 {previewVersion.version.version_number}
+          </span>
+          <button
+            onClick={onRestoreVersion}
+            className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-xs font-medium"
+          >
+            恢复
+          </button>
+          <button
+            onClick={onCancelPreview}
+            className="px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors text-xs font-medium"
+          >
+            取消
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -2189,6 +2275,32 @@ function EditorRefPlugin({ onRef }: { onRef: (editor: any) => void }) {
   useEffect(() => {
     onRef(editor);
   }, [editor, onRef]);
+  
+  return null;
+}
+
+function VersionPreviewPlugin({ content }: { content: string }) {
+  const [editor] = useLexicalComposerContext();
+  
+  useEffect(() => {
+    if (content) {
+      try {
+        // 尝试解析为 Lexical 状态
+        const parsedContent = JSON.parse(content);
+        editor.setEditorState(editor.parseEditorState(JSON.stringify(parsedContent)));
+      } catch (error) {
+        // 如果不是 JSON 格式，作为纯文本处理
+        console.log('Content is not JSON format, treating as plain text');
+        editor.update(() => {
+          const root = $getRoot();
+          root.clear();
+          const paragraph = $createParagraphNode();
+          paragraph.append($createTextNode(content));
+          root.append(paragraph);
+        });
+      }
+    }
+  }, [content, editor]);
   
   return null;
 } 

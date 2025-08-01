@@ -244,6 +244,16 @@ class ApiService {
   }
 
   /**
+   * 獲取版本內容（用於預覽）
+   */
+  async getVersionContent(id: number, versionNumber: number): Promise<{success: boolean, content: string, version_number: number}> {
+    const response = await this.client.get(
+      `/v1/documents/${id}/versions/${versionNumber}/content`
+    );
+    return response.data;
+  }
+
+  /**
    * 恢復文檔版本
    */
   async restoreDocumentVersion(id: number, versionNumber: number): Promise<VersionRestoreResponse> {
