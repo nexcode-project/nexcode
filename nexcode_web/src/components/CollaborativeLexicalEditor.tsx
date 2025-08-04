@@ -505,7 +505,7 @@ function AIAssistant({
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-50 border-l border-gray-200 min-h-0">
+    <div className="h-full flex flex-col bg-white border-l border-gray-200 min-h-0">
       {/* AI助手头部 */}
       <div className="flex-shrink-0 p-4 border-b border-gray-200 bg-white">
         <div className="flex items-center justify-between">
@@ -549,7 +549,7 @@ function AIAssistant({
       </div>
 
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 bg-white">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
             <Bot className="h-12 w-12 mx-auto mb-3 text-gray-300" />
@@ -1152,7 +1152,11 @@ export function CollaborativeLexicalEditor({
       loadVersionHistory();
     }
     setShowVersionHistory(!showVersionHistory);
-  }, [showVersionHistory, loadVersionHistory]);
+    // 如果显示历史记录，则隐藏目录
+    if (!showVersionHistory) {
+      setShowTOC(false);
+    }
+  }, [showVersionHistory, loadVersionHistory, setShowTOC]);
 
   // 更新目录
   const handleTOCUpdate = useCallback((items: Array<{id: string, text: string, level: number}>) => {
@@ -1237,7 +1241,7 @@ export function CollaborativeLexicalEditor({
   return (
     <div className="lexical-editor h-screen flex flex-col bg-white overflow-hidden">
       {/* 顶部工具栏 */}
-      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white shadow-sm">
+      <div className="flex-shrink-0 flex items-center justify-between p-4 border-b border-gray-200 bg-white">
         {/* 左侧：返回按钮和状态信息 */}
         <div className="flex items-center space-x-4">
           {/* 返回按钮 */}
@@ -1336,7 +1340,13 @@ export function CollaborativeLexicalEditor({
           
           {/* 目录按钮 */}
           <button
-            onClick={() => setShowTOC(!showTOC)}
+            onClick={() => {
+              setShowTOC(!showTOC);
+              // 如果显示目录，则隐藏历史记录
+              if (!showTOC) {
+                setShowVersionHistory(false);
+              }
+            }}
             className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
               showTOC 
                 ? 'text-blue-700 bg-blue-100 hover:bg-blue-200' 
@@ -1351,7 +1361,11 @@ export function CollaborativeLexicalEditor({
           {/* 历史按钮 */}
           <button
             onClick={toggleVersionHistory}
-            className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className={`flex items-center space-x-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              showVersionHistory 
+                ? 'text-blue-700 bg-blue-100 hover:bg-blue-200' 
+                : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+            }`}
             title="版本历史"
           >
             <History className="h-4 w-4" />
@@ -1417,7 +1431,7 @@ export function CollaborativeLexicalEditor({
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* 目录侧边栏 */}
         {showTOC && (
-          <div className="w-56 bg-gray-50 flex flex-col">
+          <div className="w-64 border-r border-gray-200 bg-white flex flex-col">
             <div className="flex-1 overflow-auto">
               <TableOfContents 
                 items={tocItems} 
@@ -1429,10 +1443,10 @@ export function CollaborativeLexicalEditor({
 
         {/* 版本历史侧边栏 */}
         {showVersionHistory && (
-          <div className="w-80 border-r border-gray-200 bg-gray-50 flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">历史记录</h3>
-            </div>
+          <div className="w-64 border-r border-gray-200 bg-white flex flex-col">
+                            <div className="px-4 py-2">
+                  <h3 className="text-xs font-medium text-gray-600">历史记录</h3>
+                </div>
             <div className="flex-1 overflow-auto">
               {versionHistory.length > 0 ? (
                 <div className="p-2">
@@ -1462,16 +1476,23 @@ export function CollaborativeLexicalEditor({
                       return groups;
                     }, {} as Record<string, typeof versionHistory>);
 
-                    return Object.entries(groupedVersions).map(([groupKey, versions]) => (
+                    return Object.entries(groupedVersions)
+                      .sort(([, versionsA], [, versionsB]) => {
+                        // 按分组中最新版本的时间倒序排列
+                        const latestA = Math.max(...versionsA.map(v => new Date(v.created_at).getTime()));
+                        const latestB = Math.max(...versionsB.map(v => new Date(v.created_at).getTime()));
+                        return latestB - latestA;
+                      })
+                      .map(([groupKey, versions]) => (
                       <div key={groupKey} className="mb-4">
                         <div className="px-2 py-1 text-xs font-medium text-gray-500 uppercase tracking-wide">
                           {groupKey}
                         </div>
-                        {versions.map((version, index) => (
+                        {versions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((version, index) => (
                           <div
                             key={version.id}
                             onClick={() => handlePreviewVersion(version)}
-                            className={`p-3 mb-1 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow cursor-pointer hover:bg-gray-50 ${
+                            className={`p-3 mb-1 bg-white rounded-lg border border-gray-100 hover:shadow-sm transition-shadow cursor-pointer hover:bg-gray-50 ${
                               isVersionPreviewMode && previewVersion?.version.id === version.id ? 'bg-blue-50 border-blue-200' : ''
                             }`}
                           >
@@ -1598,7 +1619,7 @@ export function CollaborativeLexicalEditor({
 
 
           {/* AI助手区域 */}
-          <div className="w-80 flex flex-col min-h-0">
+          <div className="w-80 flex flex-col min-h-0 bg-white border-l border-gray-200">
             <AIAssistant
               onInsertContent={insertContentToEditor}
               documentContent={previewContent}
@@ -1607,8 +1628,8 @@ export function CollaborativeLexicalEditor({
 
           {/* 实时预览区域 - 只在预览模式下显示 */}
           {isPreviewMode && (
-            <div className="w-1/2 overflow-auto bg-gray-50 min-h-0">
-              <div className="p-8 prose prose-lg max-w-none bg-white m-4 rounded-lg shadow-sm">
+            <div className="w-1/2 overflow-auto bg-white min-h-0">
+              <div className="p-8 prose prose-lg max-w-none bg-white m-4 rounded-lg">
                 <div className="markdown-preview">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {previewContent || '# 开始编写您的文档\n\n在左側編輯器中輸入 Markdown 內容，右側會實時顯示渲染效果...'}
@@ -1620,46 +1641,7 @@ export function CollaborativeLexicalEditor({
         </div>
       </div>
 
-      {/* 底部状态栏 */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
-        <div className="flex items-center space-x-4">
-          <span>字符数: {previewContent.length}</span>
-          <span>行数: {previewContent.split('\n').length}</span>
-          {hasUnsavedChanges && (
-            <span className="text-yellow-600 font-medium">● 有未保存的更改</span>
-          )}
-          {sharedbClientRef.current && (
-            <span>待处理操作: {sharedbClientRef.current.getCurrentState().pendingOperations}</span>
-          )}
-          <span className={isOnline ? 'text-green-600' : 'text-red-600'}>
-            ● {isOnline ? '智能同步已启用' : '离线模式'}
-          </span>
-          {documentState && (
-            <span className="text-blue-600">版本: v{documentState.version}</span>
-          )}
-          {lastSyncTime && (
-            <span className="text-gray-500">
-              上次同步: {lastSyncTime.toLocaleTimeString()}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center space-x-2">
-          <span>Lexical 编辑器</span>
-          <span>•</span>
-          <span>ShareDB 协作</span>
-          <span>•</span>
-          <span>AI 助手</span>
-          <span>•</span>
-          <span>{isOnline ? '在线' : '离线'}</span>
-          
-          {hasCollaborativeUpdates && (
-            <>
-              <span>•</span>
-              <span className="text-blue-600 animate-pulse">协作更新中</span>
-            </>
-          )}
-        </div>
-      </div>
+      
     </div>
   );
 }
@@ -1751,7 +1733,7 @@ function FormatToolbar({
   }, [editor]);
 
   return (
-    <div className="flex-shrink-0 px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600 flex items-center justify-between">
+    <div className="flex-shrink-0 px-4 py-2 bg-white text-xs text-gray-600 flex items-center justify-between">
       <div>
         <span className="font-medium">格式: </span>
         <span className="text-blue-600">{formatInfo}</span>
