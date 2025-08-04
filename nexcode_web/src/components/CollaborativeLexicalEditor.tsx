@@ -1641,46 +1641,7 @@ export function CollaborativeLexicalEditor({
         </div>
       </div>
 
-      {/* 底部状态栏 */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 bg-white border-t border-gray-200 text-sm text-gray-600">
-        <div className="flex items-center space-x-4">
-          <span>字符数: {previewContent.length}</span>
-          <span>行数: {previewContent.split('\n').length}</span>
-          {hasUnsavedChanges && (
-            <span className="text-yellow-600 font-medium">● 有未保存的更改</span>
-          )}
-          {sharedbClientRef.current && (
-            <span>待处理操作: {sharedbClientRef.current.getCurrentState().pendingOperations}</span>
-          )}
-          <span className={isOnline ? 'text-green-600' : 'text-red-600'}>
-            ● {isOnline ? '智能同步已启用' : '离线模式'}
-          </span>
-          {documentState && (
-            <span className="text-blue-600">版本: v{documentState.version}</span>
-          )}
-          {lastSyncTime && (
-            <span className="text-gray-500">
-              上次同步: {lastSyncTime.toLocaleTimeString()}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center space-x-2">
-          <span>Lexical 编辑器</span>
-          <span>•</span>
-          <span>ShareDB 协作</span>
-          <span>•</span>
-          <span>AI 助手</span>
-          <span>•</span>
-          <span>{isOnline ? '在线' : '离线'}</span>
-          
-          {hasCollaborativeUpdates && (
-            <>
-              <span>•</span>
-              <span className="text-blue-600 animate-pulse">协作更新中</span>
-            </>
-          )}
-        </div>
-      </div>
+      
     </div>
   );
 }
