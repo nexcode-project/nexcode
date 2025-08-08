@@ -14,6 +14,21 @@ services:
     depends_on:
       - nexcode_server
 
+  nexcode_admin:
+    build:
+      context: ..
+      dockerfile: docker/nexcode_admin/Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://localhost:8000
+    ports:
+      - "5433:5433"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000
+    volumes:
+      - ../nexcode_admin:/app
+    depends_on:
+      - nexcode_server
+
   nexcode_server:
     build:
       context: ..
@@ -27,7 +42,7 @@ services:
       - PORT=8000
       - REQUIRE_AUTH=false
       - API_TOKEN=your-server-token
-      - DATABASE_URL=postgresql+asyncpg://user:password@db:5432/nexcode
+      - DATABASE_URL=postgresql+asyncpg://user:password@db:5433/nexcode
       - MONGODB_URL=mongodb://mongo:27017/nexcode_docs
     volumes:
       - ../nexcode_server:/app

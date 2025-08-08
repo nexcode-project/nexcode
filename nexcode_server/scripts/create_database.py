@@ -24,7 +24,7 @@ async def create_database():
     
     # 提取连接信息
     host = parsed_url.hostname or 'localhost'
-    port = parsed_url.port or 5432
+    port = parsed_url.port or 5433
     username = parsed_url.username or 'postgres'
     password = parsed_url.password or 'kangkang123'
     database_name = parsed_url.path.lstrip('/') or 'nexcode'
@@ -86,7 +86,7 @@ async def test_connection():
     
     parsed_url = urlparse(DATABASE_URL.replace("+asyncpg", ""))
     host = parsed_url.hostname or 'localhost'
-    port = parsed_url.port or 5432
+    port = parsed_url.port or 5433
     username = parsed_url.username or 'postgres'
     password = parsed_url.password or 'kangkang123'
     database_name = parsed_url.path.lstrip('/') or 'nexcode'

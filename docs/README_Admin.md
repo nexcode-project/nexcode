@@ -209,7 +209,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 1. **启动服务**
    - 确保后端服务运行在 `http://localhost:8000`
-   - 启动前端服务 `http://localhost:5174`
+   - 启动前端服务 `http://localhost:5433`
 
 2. **管理员登录**
    - 默认用户名: `admin`

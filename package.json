@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@tailwindcss/typography": "^0.5.16",
-    "react-hot-toast": "^2.5.2"
-  }
-}
