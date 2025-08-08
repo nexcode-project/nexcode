@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="images/logo.png" alt="NexCode Logo" width="200">
-  <h3>智能 AI 代码助手平台</h3>
+  <h3>智能 AI 代码助手协作平台</h3>
   <p>基于LLM的软件工程流程辅助工具，致力于为企业提供将AI应用于软件工程整体流程。</p>
 </div>
 
@@ -72,7 +72,7 @@ docker-compose up -d
 
 # 3. 访问服务
 # Web界面: http://localhost:3000
-# 管理后台: http://localhost:5174
+# 管理后台: http://localhost:5433
 # API文档: http://localhost:8000/docs
 ```
 
@@ -106,7 +106,7 @@ npm run dev
 cd nexcode_admin
 npm install
 npm run dev
-# 访问: http://localhost:5174
+# 访问: http://localhost:5433
 ```
 
 #### 4. CLI工具
@@ -165,7 +165,7 @@ nexcode analyze --type dependencies     # 依赖分析
 
 ### 🛠️ 管理后台 (管理员专用)
 
-访问 `http://localhost:5174`，管理员账号：`admin` / `admin`
+访问 `http://localhost:5433`，管理员账号：`admin` / `admin`
 
 **核心功能：**
 - 📊 **系统监控面板** - 实时状态、性能指标、资源使用

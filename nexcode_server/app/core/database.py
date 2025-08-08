@@ -6,7 +6,7 @@ import os
 # 数据库配置
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql+asyncpg://postgres:kangkang123@localhost:5432/nexcode"
+    "postgresql+asyncpg://postgres:kangkang123@localhost:5433/nexcode"
 )
 
 # 同步数据库URL（用于Alembic迁移）
