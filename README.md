@@ -26,7 +26,7 @@
 
 ### 🔧 Multi-Client Collaboration
 - CLI: powerful terminal tooling integrated with Git workflow
-- Web collaborative docs: real-time co-editing for documents
+- Web collaborative docs: real-time co-editing for develop documents
 - Admin Console: full system management and monitoring
 
 ### 🔐 Enterprise-Grade Capabilities
