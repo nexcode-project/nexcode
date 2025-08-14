@@ -313,29 +313,6 @@ nexcode config set model.temperature 0.7
 nexcode config reset
 ```
 
-## 🌐 API Overview
-
-OpenAI-compatible:
-- POST `/v1/chat/completions`
-- POST `/v1/completions`
-- GET `/v1/models`
-
-NexCode endpoints:
-- POST `/v1/code-review`
-- POST `/v1/commit-message`
-- POST `/v1/intelligent-qa`
-- POST `/v1/git-error-analysis`
-- POST `/v1/code-quality-check`
-- POST `/v1/push-strategy`
-- POST `/v1/repository-analysis`
-
-Admin endpoints:
-- POST `/v1/auth/login`
-- GET `/v1/auth/me`
-- GET `/v1/users`
-- GET `/v1/commits`
-- GET `/v1/admin/stats`
-
 ## 🚀 Deployment
 
 ### Docker (Recommended)
@@ -430,7 +407,7 @@ Guidelines:
 
 ## 📄 License
 
-MIT License. See `LICENSE`.
+Apache License. See `LICENSE`.
 
 ## 🙏 Acknowledgements
 
