@@ -1,7 +1,7 @@
 # NexCode
 
 <div align="center">
-  <img src="images/logo.png" alt="NexCode Logo" width="200">
+  <img src="docs/images/logo.png" alt="NexCode Logo" width="200">
   <h3>Intelligent AI Coding Assistant & Collaboration Platform</h3>
   <p>A LLM-powered toolkit to augment the end-to-end software engineering workflow for teams.</p>
 </div>
