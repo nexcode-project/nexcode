@@ -37,6 +37,8 @@ api.interceptors.response.use(
 );
 
 export interface User {
+  updated_at: string;
+  created_at: string;
   id: number;
   username: string;
   full_name: string;

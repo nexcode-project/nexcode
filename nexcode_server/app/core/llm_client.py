@@ -1,7 +1,6 @@
 from typing import Dict, Any, Optional, Union, List
 
 import openai
-from nexcode.config import load_config
 
 from .config import settings
 from .prompt_loader import get_rendered_prompts
@@ -175,7 +174,6 @@ def get_llm_solution(
     try:
         print(f"\n=== LLM DEBUG ({task_type}) ===")
         print(f"Data keys: {list(data.keys())}")
-        config = load_config()
 
         system_content, user_content = get_rendered_prompts(task_type, data)
         # Token统计
